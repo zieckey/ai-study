@@ -107,7 +107,7 @@ func TestWeatherExecuteRequiresCity(t *testing.T) {
 }
 
 func TestRegistryRejectsDuplicateTools(t *testing.T) {
-	_, err := Registry(Echo{}, Echo{})
+	_, err := Registry(context.Background(), Echo{}, Echo{})
 	if err == nil {
 		t.Fatal("Registry returned nil error")
 	}

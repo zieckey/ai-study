@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
+	"github.com/zieckey/ai-study/internal/trace"
 )
 
 type Tool interface {
@@ -13,7 +15,8 @@ type Tool interface {
 	Execute(ctx context.Context, input json.RawMessage) (string, error)
 }
 
-func Registry(toolList ...Tool) (map[string]Tool, error) {
+func Registry(ctx context.Context, toolList ...Tool) (map[string]Tool, error) {
+	trace.Log(ctx, "tools.Registry", map[string]any{"tools": len(toolList)})
 	registry := make(map[string]Tool, len(toolList))
 	for _, tool := range toolList {
 		if tool == nil {

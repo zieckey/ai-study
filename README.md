@@ -105,6 +105,21 @@ go run ./cmd/agent -json "查询北京天气"
 }
 ```
 
+CLI 默认会把函数级 trace log 打印到 stderr，方便观察程序运行轨迹和关键参数。每条日志都是 JSON：
+
+```text
+[trace] {"function":"agent.Run.step","step":1,"messages":1,"ts":"..."}
+[trace] {"function":"tools.Weather.Execute.done","city":"北京","result":"北京：晴，25°C","ts":"..."}
+```
+
+如果只想看最终输出，可以关闭函数级日志：
+
+```bash
+go run ./cmd/agent -trace-log=false "查询北京天气"
+```
+
+注意：trace log 会打印用户输入和工具参数；API Key、Authorization、secret、token 等敏感字段会被掩码。
+
 使用真实 Claude provider：
 
 ```bash

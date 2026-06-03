@@ -9,7 +9,7 @@ import (
 )
 
 func TestToDeepSeekTools(t *testing.T) {
-	tools, err := toDeepSeekTools([]ToolSpec{{
+	tools, err := toDeepSeekTools(context.Background(), []ToolSpec{{
 		Name:        "weather",
 		Description: "查询城市天气",
 		InputSchema: `{"type":"object","properties":{"city":{"type":"string"}},"required":["city"],"additionalProperties":false}`,
@@ -26,7 +26,7 @@ func TestToDeepSeekTools(t *testing.T) {
 }
 
 func TestToDeepSeekMessagesWithToolResult(t *testing.T) {
-	messages, err := toDeepSeekMessages([]Message{
+	messages, err := toDeepSeekMessages(context.Background(), []Message{
 		{Role: RoleUser, Content: "查询北京天气"},
 		{Role: RoleAssistant, ToolUseID: "call_1", ToolName: "weather", ToolInput: `{"city":"北京"}`},
 		{Role: RoleTool, ToolUseID: "call_1", ToolName: "weather", Content: "北京：晴，25°C"},
@@ -46,7 +46,7 @@ func TestToDeepSeekMessagesWithToolResult(t *testing.T) {
 }
 
 func TestToDeepSeekMessagesRequiresToolUseID(t *testing.T) {
-	_, err := toDeepSeekMessages([]Message{{Role: RoleTool, ToolName: "weather", Content: "北京：晴，25°C"}}, "system prompt")
+	_, err := toDeepSeekMessages(context.Background(), []Message{{Role: RoleTool, ToolName: "weather", Content: "北京：晴，25°C"}}, "system prompt")
 	if err == nil {
 		t.Fatal("toDeepSeekMessages returned nil error")
 	}

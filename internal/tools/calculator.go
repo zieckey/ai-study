@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+
+	"github.com/zieckey/ai-study/internal/trace"
 )
 
 type Calculator struct{}
@@ -22,7 +24,8 @@ func (Calculator) InputSchema() string {
 	return `{"type":"object","properties":{"expression":{"type":"string","description":"简单二元四则运算表达式，例如 12 * 23"}},"required":["expression"],"additionalProperties":false}`
 }
 
-func (Calculator) Execute(_ context.Context, input json.RawMessage) (string, error) {
+func (Calculator) Execute(ctx context.Context, input json.RawMessage) (string, error) {
+	trace.Log(ctx, "tools.Calculator.Execute.start", map[string]any{"input": input})
 	var args struct {
 		Expression string `json:"expression"`
 	}
@@ -30,7 +33,7 @@ func (Calculator) Execute(_ context.Context, input json.RawMessage) (string, err
 		return "", fmt.Errorf("invalid calculator input: %w", err)
 	}
 
-	left, operator, right, err := parseExpression(args.Expression)
+	left, operator, right, err := parseExpression(ctx, args.Expression)
 	if err != nil {
 		return "", err
 	}
@@ -52,10 +55,13 @@ func (Calculator) Execute(_ context.Context, input json.RawMessage) (string, err
 		return "", fmt.Errorf("unsupported operator %q", operator)
 	}
 
-	return formatNumber(result), nil
+	formatted := formatNumber(result)
+	trace.Log(ctx, "tools.Calculator.Execute.done", map[string]any{"expression": args.Expression, "operator": operator, "result": formatted})
+	return formatted, nil
 }
 
-func parseExpression(expression string) (float64, string, float64, error) {
+func parseExpression(ctx context.Context, expression string) (float64, string, float64, error) {
+	trace.Log(ctx, "tools.parseExpression", map[string]any{"expression": expression})
 	re := regexp.MustCompile(`^\s*(-?\d+(?:\.\d+)?)\s*([+\-*/])\s*(-?\d+(?:\.\d+)?)\s*$`)
 	matches := re.FindStringSubmatch(expression)
 	if len(matches) != 4 {
@@ -71,6 +77,7 @@ func parseExpression(expression string) (float64, string, float64, error) {
 		return 0, "", 0, fmt.Errorf("invalid right number %q", matches[3])
 	}
 
+	trace.Log(ctx, "tools.parseExpression.done", map[string]any{"left": left, "operator": matches[2], "right": right})
 	return left, matches[2], right, nil
 }
 

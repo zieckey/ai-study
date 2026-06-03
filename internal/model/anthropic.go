@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
+	"github.com/zieckey/ai-study/internal/trace"
 )
 
 const defaultAnthropicSystemPrompt = `你是这个 Go 学习项目里的真实 Claude provider。
@@ -52,16 +53,18 @@ func NewAnthropicProvider(config AnthropicConfig) *AnthropicProvider {
 }
 
 func (p *AnthropicProvider) Next(ctx context.Context, req Request) (Decision, error) {
-	messages, err := toAnthropicMessages(req.Messages)
+	trace.Log(ctx, "model.AnthropicProvider.Next.start", map[string]any{"model": p.model, "max_tokens": p.maxTokens, "effort": p.effort, "messages": len(req.Messages), "tools": len(req.Tools)})
+	messages, err := toAnthropicMessages(ctx, req.Messages)
 	if err != nil {
 		return Decision{}, err
 	}
-	anthropicTools, err := toAnthropicTools(req.Tools)
+	anthropicTools, err := toAnthropicTools(ctx, req.Tools)
 	if err != nil {
 		return Decision{}, err
 	}
 
 	adaptive := anthropic.ThinkingConfigAdaptiveParam{}
+	trace.Log(ctx, "model.AnthropicProvider.Next.request", map[string]any{"model": p.model, "messages": len(messages), "tools": len(anthropicTools)})
 	resp, err := p.client.Messages.New(ctx, anthropic.MessageNewParams{
 		Model:     p.model,
 		MaxTokens: p.maxTokens,
@@ -80,13 +83,16 @@ func (p *AnthropicProvider) Next(ctx context.Context, req Request) (Decision, er
 		}},
 	})
 	if err != nil {
+		trace.Log(ctx, "model.AnthropicProvider.Next.error", map[string]any{"error": err.Error()})
 		return Decision{}, err
 	}
+	trace.Log(ctx, "model.AnthropicProvider.Next.response", map[string]any{"content_blocks": len(resp.Content), "stop_reason": resp.StopReason})
 
 	var textParts []string
 	for _, block := range resp.Content {
 		switch variant := block.AsAny().(type) {
 		case anthropic.ToolUseBlock:
+			trace.Log(ctx, "model.AnthropicProvider.Next.tool_use", map[string]any{"tool_use_id": variant.ID, "tool_name": variant.Name, "input": variant.Input})
 			return Decision{
 				Type:      DecisionToolCall,
 				ToolUseID: variant.ID,
@@ -104,10 +110,12 @@ func (p *AnthropicProvider) Next(ctx context.Context, req Request) (Decision, er
 	if answer == "" {
 		answer = fmt.Sprintf("Claude stopped with reason %q but did not return text or a tool call", resp.StopReason)
 	}
+	trace.Log(ctx, "model.AnthropicProvider.Next.final", map[string]any{"answer_len": len(answer)})
 	return Decision{Type: DecisionFinal, Answer: answer}, nil
 }
 
-func toAnthropicMessages(messages []Message) ([]anthropic.MessageParam, error) {
+func toAnthropicMessages(ctx context.Context, messages []Message) ([]anthropic.MessageParam, error) {
+	trace.Log(ctx, "model.toAnthropicMessages", map[string]any{"messages": len(messages)})
 	result := make([]anthropic.MessageParam, 0, len(messages))
 	for _, message := range messages {
 		switch message.Role {
@@ -137,7 +145,8 @@ func toAnthropicMessages(messages []Message) ([]anthropic.MessageParam, error) {
 	return result, nil
 }
 
-func toAnthropicTools(toolSpecs []ToolSpec) ([]anthropic.ToolUnionParam, error) {
+func toAnthropicTools(ctx context.Context, toolSpecs []ToolSpec) ([]anthropic.ToolUnionParam, error) {
+	trace.Log(ctx, "model.toAnthropicTools", map[string]any{"tools": len(toolSpecs)})
 	tools := make([]anthropic.ToolUnionParam, 0, len(toolSpecs))
 	for _, spec := range toolSpecs {
 		var schema struct {

@@ -11,7 +11,7 @@ import (
 )
 
 func TestAgentRunCalculator(t *testing.T) {
-	a, err := New(model.NewMockProvider(), []tools.Tool{tools.Calculator{}, tools.Clock{}, tools.Echo{}, tools.Weather{}}, Config{MaxSteps: 5})
+	a, err := New(context.Background(), model.NewMockProvider(), []tools.Tool{tools.Calculator{}, tools.Clock{}, tools.Echo{}, tools.Weather{}}, Config{MaxSteps: 5})
 	if err != nil {
 		t.Fatalf("New returned error: %v", err)
 	}
@@ -35,7 +35,7 @@ func TestAgentRunCalculator(t *testing.T) {
 }
 
 func TestAgentRunUnknownTool(t *testing.T) {
-	a, err := New(staticProvider{decision: model.Decision{Type: model.DecisionToolCall, ToolName: "missing", Arguments: json.RawMessage(`{}`)}}, nil, Config{MaxSteps: 1})
+	a, err := New(context.Background(), staticProvider{decision: model.Decision{Type: model.DecisionToolCall, ToolName: "missing", Arguments: json.RawMessage(`{}`)}}, nil, Config{MaxSteps: 1})
 	if err != nil {
 		t.Fatalf("New returned error: %v", err)
 	}
@@ -46,7 +46,7 @@ func TestAgentRunUnknownTool(t *testing.T) {
 }
 
 func TestAgentRunMaxSteps(t *testing.T) {
-	a, err := New(staticProvider{decision: model.Decision{Type: model.DecisionToolCall, ToolName: "echo", Arguments: json.RawMessage(`{"text":"again"}`)}}, []tools.Tool{tools.Echo{}}, Config{MaxSteps: 1})
+	a, err := New(context.Background(), staticProvider{decision: model.Decision{Type: model.DecisionToolCall, ToolName: "echo", Arguments: json.RawMessage(`{"text":"again"}`)}}, []tools.Tool{tools.Echo{}}, Config{MaxSteps: 1})
 	if err != nil {
 		t.Fatalf("New returned error: %v", err)
 	}
@@ -57,7 +57,7 @@ func TestAgentRunMaxSteps(t *testing.T) {
 }
 
 func TestAgentRunToolFailure(t *testing.T) {
-	a, err := New(staticProvider{decision: model.Decision{Type: model.DecisionToolCall, ToolName: "fail", Arguments: json.RawMessage(`{}`)}}, []tools.Tool{failingTool{}}, Config{MaxSteps: 1})
+	a, err := New(context.Background(), staticProvider{decision: model.Decision{Type: model.DecisionToolCall, ToolName: "fail", Arguments: json.RawMessage(`{}`)}}, []tools.Tool{failingTool{}}, Config{MaxSteps: 1})
 	if err != nil {
 		t.Fatalf("New returned error: %v", err)
 	}

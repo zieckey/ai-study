@@ -11,6 +11,7 @@ import (
 	"github.com/zieckey/ai-study/internal/agent"
 	"github.com/zieckey/ai-study/internal/model"
 	"github.com/zieckey/ai-study/internal/tools"
+	"github.com/zieckey/ai-study/internal/trace"
 )
 
 func main() {
@@ -20,7 +21,8 @@ func main() {
 	anthropicMaxTokens := flag.Int64("anthropic-max-tokens", 4096, "Anthropic provider 单次模型响应的最大 token 数")
 	deepSeekModel := flag.String("deepseek-model", "deepseek-chat", "DeepSeek provider 使用的模型")
 	deepSeekMaxTokens := flag.Int64("deepseek-max-tokens", 4096, "DeepSeek provider 单次模型响应的最大 token 数")
-	trace := flag.Bool("trace", true, "是否打印执行过程")
+	showTrace := flag.Bool("trace", true, "是否打印执行过程")
+	traceLog := flag.Bool("trace-log", true, "是否打印函数级 trace log 到 stderr")
 	jsonOutput := flag.Bool("json", false, "以 JSON 格式输出 goal、trace 和 answer")
 	flag.Parse()
 
@@ -31,13 +33,30 @@ func main() {
 		os.Exit(2)
 	}
 
-	modelProvider, err := buildProvider(*provider, *anthropicModel, *anthropicMaxTokens, *deepSeekModel, *deepSeekMaxTokens)
+	logger := trace.NewLogger(os.Stderr, *traceLog)
+	ctx := trace.WithLogger(context.Background(), logger)
+	trace.Log(ctx, "main.main", map[string]any{
+		"provider":                 *provider,
+		"anthropic_model":          *anthropicModel,
+		"anthropic_max_tokens":     *anthropicMaxTokens,
+		"deepseek_model":           *deepSeekModel,
+		"deepseek_max_tokens":      *deepSeekMaxTokens,
+		"max_steps":                *maxSteps,
+		"show_trace":               *showTrace,
+		"json_output":              *jsonOutput,
+		"goal":                     goal,
+		"anthropic_api_key_set":    os.Getenv("ANTHROPIC_API_KEY") != "",
+		"deepseek_api_key_set":     os.Getenv("DEEPSEEK_API_KEY") != "",
+		"deepseek_base_url_custom": os.Getenv("DEEPSEEK_BASE_URL") != "",
+	})
+
+	modelProvider, err := buildProvider(ctx, *provider, *anthropicModel, *anthropicMaxTokens, *deepSeekModel, *deepSeekMaxTokens)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 
-	a, err := agent.New(modelProvider, []tools.Tool{
+	a, err := agent.New(ctx, modelProvider, []tools.Tool{
 		tools.Calculator{},
 		tools.Clock{},
 		tools.Echo{},
@@ -48,14 +67,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	result, err := a.Run(context.Background(), goal)
+	result, err := a.Run(ctx, goal)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 
 	if *jsonOutput {
-		if err := printJSON(goal, result); err != nil {
+		if err := printJSON(ctx, goal, result); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
@@ -63,13 +82,21 @@ func main() {
 	}
 
 	fmt.Printf("Goal: %s\n\n", goal)
-	if *trace {
-		printTrace(result.Trace)
+	if *showTrace {
+		printTrace(ctx, result.Trace)
 	}
 	fmt.Printf("Final Answer:\n%s\n", result.Answer)
 }
 
-func buildProvider(name string, anthropicModel string, anthropicMaxTokens int64, deepSeekModel string, deepSeekMaxTokens int64) (model.Provider, error) {
+func buildProvider(ctx context.Context, name string, anthropicModel string, anthropicMaxTokens int64, deepSeekModel string, deepSeekMaxTokens int64) (model.Provider, error) {
+	trace.Log(ctx, "main.buildProvider", map[string]any{
+		"provider":             name,
+		"anthropic_model":      anthropicModel,
+		"anthropic_max_tokens": anthropicMaxTokens,
+		"deepseek_model":       deepSeekModel,
+		"deepseek_max_tokens":  deepSeekMaxTokens,
+	})
+
 	switch name {
 	case "mock":
 		return model.NewMockProvider(), nil
@@ -88,8 +115,9 @@ func buildProvider(name string, anthropicModel string, anthropicMaxTokens int64,
 	}
 }
 
-func printTrace(trace []agent.TraceEvent) {
-	for _, event := range trace {
+func printTrace(ctx context.Context, traceEvents []agent.TraceEvent) {
+	trace.Log(ctx, "main.printTrace", map[string]any{"events": len(traceEvents)})
+	for _, event := range traceEvents {
 		fmt.Printf("Step %d\n", event.Step)
 		switch event.Decision {
 		case "tool_call":
@@ -102,7 +130,8 @@ func printTrace(trace []agent.TraceEvent) {
 	}
 }
 
-func printJSON(goal string, result agent.Result) error {
+func printJSON(ctx context.Context, goal string, result agent.Result) error {
+	trace.Log(ctx, "main.printJSON", map[string]any{"goal": goal, "trace_events": len(result.Trace), "answer_len": len(result.Answer)})
 	output := struct {
 		Goal string `json:"goal"`
 		agent.Result
