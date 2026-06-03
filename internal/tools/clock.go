@@ -19,7 +19,7 @@ func (Clock) Description() string {
 }
 
 func (Clock) InputSchema() string {
-	return `{"format":"string, optional Go time layout"}`
+	return `{"type":"object","properties":{"format":{"type":"string","description":"可选的 Go time layout，例如 2006-01-02 15:04:05"}},"additionalProperties":false}`
 }
 
 func (c Clock) Execute(_ context.Context, input json.RawMessage) (string, error) {

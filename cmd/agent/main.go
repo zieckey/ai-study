@@ -15,7 +15,11 @@ import (
 
 func main() {
 	maxSteps := flag.Int("max-steps", 5, "agent 最大循环步数")
-	provider := flag.String("provider", "mock", "模型 provider，目前支持 mock")
+	provider := flag.String("provider", "mock", "模型 provider，支持 mock、anthropic 或 deepseek")
+	anthropicModel := flag.String("anthropic-model", "claude-opus-4-7", "Anthropic provider 使用的 Claude 模型")
+	anthropicMaxTokens := flag.Int64("anthropic-max-tokens", 4096, "Anthropic provider 单次模型响应的最大 token 数")
+	deepSeekModel := flag.String("deepseek-model", "deepseek-chat", "DeepSeek provider 使用的模型")
+	deepSeekMaxTokens := flag.Int64("deepseek-max-tokens", 4096, "DeepSeek provider 单次模型响应的最大 token 数")
 	trace := flag.Bool("trace", true, "是否打印执行过程")
 	jsonOutput := flag.Bool("json", false, "以 JSON 格式输出 goal、trace 和 answer")
 	flag.Parse()
@@ -27,7 +31,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	modelProvider, err := buildProvider(*provider)
+	modelProvider, err := buildProvider(*provider, *anthropicModel, *anthropicMaxTokens, *deepSeekModel, *deepSeekMaxTokens)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -65,12 +69,22 @@ func main() {
 	fmt.Printf("Final Answer:\n%s\n", result.Answer)
 }
 
-func buildProvider(name string) (model.Provider, error) {
+func buildProvider(name string, anthropicModel string, anthropicMaxTokens int64, deepSeekModel string, deepSeekMaxTokens int64) (model.Provider, error) {
 	switch name {
 	case "mock":
 		return model.NewMockProvider(), nil
+	case "anthropic", "claude":
+		return model.NewAnthropicProvider(model.AnthropicConfig{
+			Model:     anthropicModel,
+			MaxTokens: anthropicMaxTokens,
+		}), nil
+	case "deepseek":
+		return model.NewDeepSeekProvider(model.DeepSeekConfig{
+			Model:     deepSeekModel,
+			MaxTokens: deepSeekMaxTokens,
+		}), nil
 	default:
-		return nil, fmt.Errorf("unsupported provider %q; 当前示例只实现 mock", name)
+		return nil, fmt.Errorf("unsupported provider %q; 支持 mock、anthropic 或 deepseek", name)
 	}
 }
 

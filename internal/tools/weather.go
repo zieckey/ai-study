@@ -17,7 +17,7 @@ func (Weather) Description() string {
 }
 
 func (Weather) InputSchema() string {
-	return `{"city":"string"}`
+	return `{"type":"object","properties":{"city":{"type":"string","description":"城市名称，例如 北京、上海、深圳、杭州"}},"required":["city"],"additionalProperties":false}`
 }
 
 func (Weather) Execute(_ context.Context, input json.RawMessage) (string, error) {

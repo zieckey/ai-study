@@ -72,8 +72,8 @@ func (a *Agent) Run(ctx context.Context, goal string) (Result, error) {
 				Observation: observation,
 			})
 			messages = append(messages,
-				model.Message{Role: model.RoleAssistant, Content: "tool_call", ToolName: decision.ToolName, ToolInput: string(decision.Arguments)},
-				model.Message{Role: model.RoleTool, Content: observation, ToolName: decision.ToolName},
+				model.Message{Role: model.RoleAssistant, Content: decision.Answer, ToolUseID: decision.ToolUseID, ToolName: decision.ToolName, ToolInput: string(decision.Arguments)},
+				model.Message{Role: model.RoleTool, Content: observation, ToolUseID: decision.ToolUseID, ToolName: decision.ToolName},
 			)
 		default:
 			return Result{}, fmt.Errorf("unknown decision type %q", decision.Type)

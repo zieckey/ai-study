@@ -19,7 +19,7 @@ func (Calculator) Description() string {
 }
 
 func (Calculator) InputSchema() string {
-	return `{"expression":"string, format: number operator number"}`
+	return `{"type":"object","properties":{"expression":{"type":"string","description":"简单二元四则运算表达式，例如 12 * 23"}},"required":["expression"],"additionalProperties":false}`
 }
 
 func (Calculator) Execute(_ context.Context, input json.RawMessage) (string, error) {

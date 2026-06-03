@@ -17,7 +17,7 @@ func (Echo) Description() string {
 }
 
 func (Echo) InputSchema() string {
-	return `{"text":"string"}`
+	return `{"type":"object","properties":{"text":{"type":"string","description":"需要原样返回的文本"}},"required":["text"],"additionalProperties":false}`
 }
 
 func (Echo) Execute(_ context.Context, input json.RawMessage) (string, error) {

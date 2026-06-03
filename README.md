@@ -1,6 +1,6 @@
 # Golang AI Agent 入门项目
 
-这个项目用 Go 从零实现一个最小但完整的 AI Agent。它不依赖真实大模型 API，默认使用一个规则驱动的 `mock` 模型来模拟 LLM 的工具调用能力，所以你可以直接运行、调试和修改代码，专注学习 Agent 的核心原理。
+这个项目用 Go 从零实现一个最小但完整的 AI Agent。默认使用规则驱动的 `mock` 模型来模拟 LLM 的工具调用能力，不需要 API Key 就能运行；同时也支持 `anthropic` 和 `deepseek` provider，用真实大模型演示 tool use。
 
 ## 你会学到什么
 
@@ -9,7 +9,7 @@
 - 模型、工具、观察结果、终止条件分别负责什么
 - 如何用 Go 组织一个可扩展的 Agent 项目
 - 如何添加一个新工具
-- 后续如何接入 Claude、OpenAI 或本地模型
+- 如何接入 Claude/Anthropic、DeepSeek、OpenAI 或本地模型
 
 ## 什么是 AI Agent
 
@@ -105,6 +105,54 @@ go run ./cmd/agent -json "查询北京天气"
 }
 ```
 
+使用真实 Claude provider：
+
+```bash
+export ANTHROPIC_API_KEY="你的 API Key"
+go run ./cmd/agent -provider anthropic "帮我计算 12 * 23，然后查询北京天气"
+```
+
+可选参数：
+
+```bash
+go run ./cmd/agent \
+  -provider anthropic \
+  -anthropic-model claude-opus-4-7 \
+  -anthropic-max-tokens 4096 \
+  "查询北京天气"
+```
+
+`anthropic` provider 使用官方 Go SDK：
+
+- 默认模型是 `claude-opus-4-7`。
+- API Key 从 `ANTHROPIC_API_KEY` 环境变量读取，不要写进代码或提交到 Git。
+- Agent Loop 仍然由本项目控制；Claude 只负责根据上下文返回 `tool_use` 或最终文本。
+- 工具仍在本地执行，所以你可以在 `internal/tools` 中控制真实副作用和安全边界。
+
+使用真实 DeepSeek provider：
+
+```bash
+export DEEPSEEK_API_KEY="你的 DeepSeek API Key"
+go run ./cmd/agent -provider deepseek "帮我计算 12 * 23，然后查询北京天气"
+```
+
+可选参数：
+
+```bash
+go run ./cmd/agent \
+  -provider deepseek \
+  -deepseek-model deepseek-chat \
+  -deepseek-max-tokens 4096 \
+  "查询北京天气"
+```
+
+`deepseek` provider 使用 OpenAI-compatible Chat Completions 协议：
+
+- 默认模型是 `deepseek-chat`。
+- API Key 从 `DEEPSEEK_API_KEY` 环境变量读取。
+- 如果你使用代理或兼容网关，可以用 `DEEPSEEK_BASE_URL` 覆盖默认地址。
+- DeepSeek 返回 `tool_calls` 后，Agent 仍然在本地执行工具，并把 `tool_call_id` 对应的 observation 继续发回模型。
+
 运行测试：
 
 ```bash
@@ -120,6 +168,8 @@ go test ./...
 ├── internal/agent/types.go        # Agent 配置、结果、trace 类型
 ├── internal/model/provider.go     # 模型 Provider 抽象
 ├── internal/model/mock.go         # 规则驱动的 mock 模型
+├── internal/model/anthropic.go    # 真实 Claude/Anthropic tool use provider
+├── internal/model/deepseek.go     # 真实 DeepSeek tool calling provider
 ├── internal/tools/tool.go         # 工具接口和注册表
 ├── internal/tools/calculator.go   # 计算器工具
 ├── internal/tools/clock.go        # 当前时间工具
@@ -221,7 +271,9 @@ type Weather struct{}
 
 func (Weather) Name() string { return "weather" }
 func (Weather) Description() string { return "查询城市天气，当前返回 mock 数据" }
-func (Weather) InputSchema() string { return `{"city":"string"}` }
+func (Weather) InputSchema() string {
+    return `{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}`
+}
 func (Weather) Execute(ctx context.Context, input json.RawMessage) (string, error) {
     return "北京：晴，25°C", nil
 }
@@ -248,10 +300,9 @@ tool_call weather {"city":"北京"}
 
 ## 如何扩展到真实模型
 
-当前项目只有 `mock` provider。后续可以新增：
+当前项目已经实现了 `anthropic` 和 `deepseek` provider。后续如果要增加 OpenAI 或 Ollama，可以继续新增：
 
 ```text
-internal/model/anthropic.go
 internal/model/openai.go
 internal/model/ollama.go
 ```
@@ -271,8 +322,9 @@ type Provider interface {
 1. 把 `messages` 转成模型 API 需要的格式。
 2. 把 `tools.Tool` 的描述和参数 schema 转成模型的 tool schema。
 3. 调用模型 API。
-4. 如果模型返回 tool call，转成项目里的 `DecisionToolCall`。
-5. 如果模型返回文本答案，转成 `DecisionFinal`。
+4. 如果模型返回 tool call，转成项目里的 `DecisionToolCall`，并保留 `tool_use_id` 或 `tool_call_id`。
+5. Agent 执行本地工具，把 observation 和对应 ID 一起放回上下文。
+6. 如果模型返回文本答案，转成 `DecisionFinal`。
 
 这就是为什么项目先抽象出 `Provider`：Agent Loop 和具体模型 API 解耦。
 
@@ -296,17 +348,16 @@ type Provider interface {
 
 ## 练习
 
-1. 添加一个 `weather` mock 工具。
-2. 添加一个 `file_search` 工具，搜索当前目录里的文件名。
-3. 给 CLI 增加 `-json` 参数，输出结构化 trace。
-4. 给 Agent 增加多轮对话模式。
-5. 实现 `anthropic` provider，接入 Claude 的 tool use。
-6. 实现 `ollama` provider，接入本地模型。
+1. 添加一个 `file_search` 工具，搜索当前目录里的文件名。
+2. 给 Agent 增加多轮对话模式。
+3. 实现 `ollama` provider，接入本地模型。
+4. 实现 `openai` provider，对比 function calling、Claude tool use 和 DeepSeek tool calling。
+5. 给有副作用的工具增加人工确认机制。
 
 ## 当前版本的边界
 
-- 只支持 mock provider。
 - calculator 只支持 `number operator number` 格式。
+- weather 是 mock 数据，不调用真实天气 API。
 - 没有长期记忆。
 - 没有真实网络工具。
 - 没有复杂 JSON Schema 校验。

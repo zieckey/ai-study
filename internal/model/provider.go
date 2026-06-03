@@ -16,6 +16,7 @@ const (
 type Message struct {
 	Role      Role   `json:"role"`
 	Content   string `json:"content"`
+	ToolUseID string `json:"tool_use_id,omitempty"`
 	ToolName  string `json:"tool_name,omitempty"`
 	ToolInput string `json:"tool_input,omitempty"`
 }
@@ -40,6 +41,7 @@ const (
 
 type Decision struct {
 	Type      DecisionType    `json:"type"`
+	ToolUseID string          `json:"tool_use_id,omitempty"`
 	ToolName  string          `json:"tool_name,omitempty"`
 	Arguments json.RawMessage `json:"arguments,omitempty"`
 	Answer    string          `json:"answer,omitempty"`
