@@ -11,7 +11,7 @@ import (
 )
 
 func TestAgentRunCalculator(t *testing.T) {
-	a, err := New(model.NewMockProvider(), []tools.Tool{tools.Calculator{}, tools.Clock{}, tools.Echo{}}, Config{MaxSteps: 5})
+	a, err := New(model.NewMockProvider(), []tools.Tool{tools.Calculator{}, tools.Clock{}, tools.Echo{}, tools.Weather{}}, Config{MaxSteps: 5})
 	if err != nil {
 		t.Fatalf("New returned error: %v", err)
 	}

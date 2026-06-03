@@ -35,6 +35,7 @@ func main() {
 		tools.Calculator{},
 		tools.Clock{},
 		tools.Echo{},
+		tools.Weather{},
 	}, agent.Config{MaxSteps: *maxSteps})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)

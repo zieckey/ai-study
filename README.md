@@ -44,6 +44,7 @@ LLM + Tools + Memory/State + Loop + Stop Condition
 
 - 输入里有 `12 * 23` 这种表达式时，模型决定调用 `calculator`。
 - 输入里有 `时间` 或 `几点` 时，模型决定调用 `clock`。
+- 输入里有 `天气` 时，模型决定调用 `weather`。
 - 输入里有 `重复` 时，模型决定调用 `echo`。
 - 工具返回 observation 后，模型输出 final answer。
 
@@ -76,6 +77,7 @@ Final Answer:
 
 ```bash
 go run ./cmd/agent "现在几点？"
+go run ./cmd/agent "查询北京天气"
 go run ./cmd/agent "请重复 hello agent"
 go run ./cmd/agent -max-steps 3 "帮我计算 1 + 2"
 ```
@@ -98,7 +100,8 @@ go test ./...
 ├── internal/tools/tool.go         # 工具接口和注册表
 ├── internal/tools/calculator.go   # 计算器工具
 ├── internal/tools/clock.go        # 当前时间工具
-└── internal/tools/echo.go         # 回显工具
+├── internal/tools/echo.go         # 回显工具
+└── internal/tools/weather.go      # mock 天气工具
 ```
 
 ## 核心实现讲解
@@ -141,6 +144,7 @@ type Tool interface {
 
 - `calculator` 负责计算。
 - `clock` 负责读取当前时间。
+- `weather` 负责返回 mock 天气。
 - `echo` 负责返回文本。
 
 模型只决定“要调用什么工具、传什么参数”；真正执行动作的是工具。
@@ -185,7 +189,7 @@ Trace 可以帮助你看到模型“想做什么”、工具“实际做了什�
 
 ## 如何添加一个新工具
 
-假设你想添加一个 `weather` 工具。
+本项目已经实现了 `weather` 工具，可以用它学习添加工具的完整路径。
 
 第一步，实现 `tools.Tool` 接口：
 
@@ -193,7 +197,7 @@ Trace 可以帮助你看到模型“想做什么”、工具“实际做了什�
 type Weather struct{}
 
 func (Weather) Name() string { return "weather" }
-func (Weather) Description() string { return "查询城市天气" }
+func (Weather) Description() string { return "查询城市天气，当前返回 mock 数据" }
 func (Weather) InputSchema() string { return `{"city":"string"}` }
 func (Weather) Execute(ctx context.Context, input json.RawMessage) (string, error) {
     return "北京：晴，25°C", nil
@@ -217,7 +221,7 @@ func (Weather) Execute(ctx context.Context, input json.RawMessage) (string, erro
 tool_call weather {"city":"北京"}
 ```
 
-如果接入真实大模型，第三步通常由模型根据工具描述自动决定。
+如果接入真实大模型，第三步通常由模型根据工具描述自动决定。你可以照这个模式继续添加 `currency`、`todo` 或 `file_search` 工具。
 
 ## 如何扩展到真实模型
 

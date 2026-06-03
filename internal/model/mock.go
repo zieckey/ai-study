@@ -28,6 +28,9 @@ func (p *MockProvider) Next(_ context.Context, req Request) (Decision, error) {
 	if expression := findExpression(goal); expression != "" {
 		return toolCall("calculator", map[string]string{"expression": expression})
 	}
+	if city := cityFromWeatherRequest(goal); city != "" {
+		return toolCall("weather", map[string]string{"city": city})
+	}
 	if asksForTime(goal) {
 		return toolCall("clock", map[string]string{"format": "2006-01-02 15:04:05"})
 	}
@@ -68,6 +71,8 @@ func finalFromObservation(messages []Message) Decision {
 		return Decision{Type: DecisionFinal, Answer: fmt.Sprintf("计算结果是 %s", last.Content)}
 	case "clock":
 		return Decision{Type: DecisionFinal, Answer: fmt.Sprintf("当前时间是 %s", last.Content)}
+	case "weather":
+		return Decision{Type: DecisionFinal, Answer: fmt.Sprintf("天气查询结果：%s", last.Content)}
 	case "echo":
 		return Decision{Type: DecisionFinal, Answer: last.Content}
 	default:
@@ -82,6 +87,18 @@ func firstUserMessage(messages []Message) string {
 		}
 	}
 	return ""
+}
+
+func cityFromWeatherRequest(goal string) string {
+	if !strings.Contains(goal, "天气") && !strings.Contains(strings.ToLower(goal), "weather") {
+		return ""
+	}
+	for _, city := range []string{"北京", "上海", "深圳", "杭州"} {
+		if strings.Contains(goal, city) {
+			return city
+		}
+	}
+	return "北京"
 }
 
 func asksForTime(goal string) bool {

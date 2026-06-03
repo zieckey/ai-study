@@ -86,6 +86,26 @@ func TestEchoExecute(t *testing.T) {
 	}
 }
 
+func TestWeatherExecute(t *testing.T) {
+	input := json.RawMessage(`{"city":"北京"}`)
+
+	got, err := (Weather{}).Execute(context.Background(), input)
+	if err != nil {
+		t.Fatalf("Execute returned error: %v", err)
+	}
+	if got != "北京：晴，25°C" {
+		t.Fatalf("Execute() = %q", got)
+	}
+}
+
+func TestWeatherExecuteRequiresCity(t *testing.T) {
+	input := json.RawMessage(`{"city":""}`)
+
+	if _, err := (Weather{}).Execute(context.Background(), input); err == nil {
+		t.Fatal("Execute returned nil error")
+	}
+}
+
 func TestRegistryRejectsDuplicateTools(t *testing.T) {
 	_, err := Registry(Echo{}, Echo{})
 	if err == nil {

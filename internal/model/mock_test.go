@@ -35,6 +35,21 @@ func TestMockProviderClockDecision(t *testing.T) {
 	}
 }
 
+func TestMockProviderWeatherDecision(t *testing.T) {
+	decision, err := NewMockProvider().Next(context.Background(), Request{
+		Messages: []Message{{Role: RoleUser, Content: "查询上海天气"}},
+	})
+	if err != nil {
+		t.Fatalf("Next returned error: %v", err)
+	}
+	if decision.Type != DecisionToolCall || decision.ToolName != "weather" {
+		t.Fatalf("decision = %+v", decision)
+	}
+	if string(decision.Arguments) != `{"city":"上海"}` {
+		t.Fatalf("Arguments = %s", string(decision.Arguments))
+	}
+}
+
 func TestMockProviderFinalFromObservation(t *testing.T) {
 	decision, err := NewMockProvider().Next(context.Background(), Request{
 		Messages: []Message{
