@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -16,6 +17,7 @@ func main() {
 	maxSteps := flag.Int("max-steps", 5, "agent 最大循环步数")
 	provider := flag.String("provider", "mock", "模型 provider，目前支持 mock")
 	trace := flag.Bool("trace", true, "是否打印执行过程")
+	jsonOutput := flag.Bool("json", false, "以 JSON 格式输出 goal、trace 和 answer")
 	flag.Parse()
 
 	goal := strings.TrimSpace(strings.Join(flag.Args(), " "))
@@ -48,6 +50,14 @@ func main() {
 		os.Exit(1)
 	}
 
+	if *jsonOutput {
+		if err := printJSON(goal, result); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	fmt.Printf("Goal: %s\n\n", goal)
 	if *trace {
 		printTrace(result.Trace)
@@ -76,4 +86,18 @@ func printTrace(trace []agent.TraceEvent) {
 			fmt.Printf("Model decision: final answer\n\n")
 		}
 	}
+}
+
+func printJSON(goal string, result agent.Result) error {
+	output := struct {
+		Goal string `json:"goal"`
+		agent.Result
+	}{
+		Goal:   goal,
+		Result: result,
+	}
+
+	encoder := json.NewEncoder(os.Stdout)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(output)
 }

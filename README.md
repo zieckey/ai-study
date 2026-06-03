@@ -80,6 +80,29 @@ go run ./cmd/agent "现在几点？"
 go run ./cmd/agent "查询北京天气"
 go run ./cmd/agent "请重复 hello agent"
 go run ./cmd/agent -max-steps 3 "帮我计算 1 + 2"
+go run ./cmd/agent -json "查询北京天气"
+```
+
+`-json` 会输出结构化 trace，适合接日志、Web UI 或其他程序：
+
+```json
+{
+  "goal": "查询北京天气",
+  "answer": "天气查询结果：北京：晴，25°C",
+  "trace": [
+    {
+      "step": 1,
+      "decision": "tool_call",
+      "tool_name": "weather",
+      "tool_input": {"city":"北京"},
+      "observation": "北京：晴，25°C"
+    },
+    {
+      "step": 2,
+      "decision": "final"
+    }
+  ]
+}
 ```
 
 运行测试：

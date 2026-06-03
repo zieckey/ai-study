@@ -7,14 +7,14 @@ type Config struct {
 }
 
 type Result struct {
-	Answer string
-	Trace  []TraceEvent
+	Answer string       `json:"answer"`
+	Trace  []TraceEvent `json:"trace"`
 }
 
 type TraceEvent struct {
-	Step        int
-	Decision    string
-	ToolName    string
-	ToolInput   json.RawMessage
-	Observation string
+	Step        int             `json:"step"`
+	Decision    string          `json:"decision"`
+	ToolName    string          `json:"tool_name,omitempty"`
+	ToolInput   json.RawMessage `json:"tool_input,omitempty"`
+	Observation string          `json:"observation,omitempty"`
 }
