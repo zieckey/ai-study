@@ -343,6 +343,290 @@ type Provider interface {
 
 这就是为什么项目先抽象出 `Provider`：Agent Loop 和具体模型 API 解耦。
 
+## DeepSeek 第一次请求与 tool_calls 格式
+
+以 DeepSeek provider 为例，第一次请求发生在 `internal/model/deepseek.go` 的 `DeepSeekProvider.Next()` 中。它的目的不是直接拿最终答案，而是把当前 Agent 状态发给 DeepSeek，让模型判断下一步应该直接回答，还是调用某个工具。
+
+当你运行：
+
+```bash
+go run ./cmd/agent -provider deepseek "查询北京天气"
+```
+
+Agent Loop 会先构造内部消息：
+
+```go
+[]Message{
+    {Role: RoleUser, Content: "查询北京天气"},
+}
+```
+
+然后把两类信息传给 DeepSeek provider：
+
+1. `Messages`：当前对话历史。第一次请求时通常只有用户输入。
+2. `Tools`：当前 Agent 支持的工具，例如 `calculator`、`clock`、`weather`、`echo`。
+
+DeepSeek provider 会把这些内部结构转换成 OpenAI-compatible Chat Completions 请求。
+
+### 第一次请求体
+
+概念上，请求 JSON 类似这样：
+
+```json
+{
+  "model": "deepseek-chat",
+  "messages": [
+    {
+      "role": "system",
+      "content": "你是这个 Go 学习项目里的 DeepSeek provider..."
+    },
+    {
+      "role": "user",
+      "content": "查询北京天气"
+    }
+  ],
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "weather",
+        "description": "查询城市天气，当前返回 mock 数据",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "city": {
+              "type": "string",
+              "description": "城市名称，例如 北京、上海、深圳、杭州"
+            }
+          },
+          "required": ["city"],
+          "additionalProperties": false
+        }
+      }
+    }
+  ],
+  "tool_choice": "auto",
+  "max_tokens": 4096
+}
+```
+
+`messages` 给模型提供上下文；`tools` 告诉模型有哪些函数可以调用，以及每个函数需要什么参数；`tool_choice: "auto"` 表示让模型自己决定是否调用工具。
+
+### DeepSeek 直接回答的返回格式
+
+如果用户问的是普通问题，例如：
+
+```text
+你好
+```
+
+DeepSeek 可能直接返回：
+
+```json
+{
+  "choices": [
+    {
+      "message": {
+        "role": "assistant",
+        "content": "你好！有什么我可以帮你的吗？"
+      }
+    }
+  ]
+}
+```
+
+这种情况下，provider 会把它转成：
+
+```go
+Decision{
+    Type:   DecisionFinal,
+    Answer: answer,
+}
+```
+
+### DeepSeek 调用工具的返回格式
+
+如果用户问：
+
+```text
+查询北京天气
+```
+
+DeepSeek 应该返回 `tool_calls`，格式类似：
+
+```json
+{
+  "choices": [
+    {
+      "message": {
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [
+          {
+            "id": "call_1",
+            "type": "function",
+            "function": {
+              "name": "weather",
+              "arguments": "{\"city\":\"北京\"}"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
+```
+
+`tool_calls` 是一个数组，每个元素表示一次工具调用。
+
+字段含义：
+
+- `id`：本次工具调用的唯一 ID。后续把工具结果发回 DeepSeek 时，必须带上这个 ID。
+- `type`：当前是 `function`，表示函数工具调用。
+- `function.name`：模型想调用的工具名，例如 `weather`。
+- `function.arguments`：工具参数。注意它是一个 JSON 字符串，不是直接的 JSON object。例如 `"{\"city\":\"北京\"}"` 的实际含义是 `{"city":"北京"}`。
+
+代码会把这个结果转成内部决策：
+
+```go
+Decision{
+    Type:      DecisionToolCall,
+    ToolUseID: "call_1",
+    ToolName:  "weather",
+    Arguments: json.RawMessage(`{"city":"北京"}`),
+}
+```
+
+然后 Agent 根据 `ToolName` 找到本地工具，执行：
+
+```go
+observation, err := tool.Execute(ctx, decision.Arguments)
+```
+
+对于 `weather` 工具，输入是：
+
+```json
+{"city":"北京"}
+```
+
+输出是：
+
+```text
+北京：晴，25°C
+```
+
+### 第二次请求如何把工具结果发回 DeepSeek
+
+工具执行后，内部 messages 会变成类似：
+
+```go
+[]Message{
+    {
+        Role:    RoleUser,
+        Content: "查询北京天气",
+    },
+    {
+        Role:      RoleAssistant,
+        ToolUseID: "call_1",
+        ToolName:  "weather",
+        ToolInput: `{"city":"北京"}`,
+    },
+    {
+        Role:      RoleTool,
+        ToolUseID: "call_1",
+        ToolName:  "weather",
+        Content:   "北京：晴，25°C",
+    },
+}
+```
+
+再转换成 DeepSeek API 格式时，会变成：
+
+```json
+[
+  {
+    "role": "system",
+    "content": "你是这个 Go 学习项目里的 DeepSeek provider..."
+  },
+  {
+    "role": "user",
+    "content": "查询北京天气"
+  },
+  {
+    "role": "assistant",
+    "content": "",
+    "tool_calls": [
+      {
+        "id": "call_1",
+        "type": "function",
+        "function": {
+          "name": "weather",
+          "arguments": "{\"city\":\"北京\"}"
+        }
+      }
+    ]
+  },
+  {
+    "role": "tool",
+    "tool_call_id": "call_1",
+    "content": "北京：晴，25°C"
+  }
+]
+```
+
+最后这条最关键：
+
+```json
+{
+  "role": "tool",
+  "tool_call_id": "call_1",
+  "content": "北京：晴，25°C"
+}
+```
+
+它告诉 DeepSeek：你刚才请求的 `call_1` 工具调用已经执行完了，结果是 `北京：晴，25°C`。
+
+然后 DeepSeek 会基于这个 observation 生成最终回答，例如：
+
+```json
+{
+  "choices": [
+    {
+      "message": {
+        "role": "assistant",
+        "content": "北京当前天气：晴，25°C。"
+      }
+    }
+  ]
+}
+```
+
+### DeepSeek tool calling 的完整链路
+
+```text
+用户输入
+  ↓
+Agent 构造 messages + tools
+  ↓
+第一次请求 DeepSeek
+  ↓
+DeepSeek 返回 tool_calls: weather({"city":"北京"})
+  ↓
+Agent 执行本地 Weather 工具
+  ↓
+得到 observation: 北京：晴，25°C
+  ↓
+第二次请求 DeepSeek，带上 tool_call_id 和工具结果
+  ↓
+DeepSeek 返回最终自然语言答案
+  ↓
+Agent 结束
+```
+
+所以第一个请求的核心目的不是“拿最终答案”，而是：
+
+> 让 DeepSeek 根据用户目标和工具列表，决定下一步是否需要调用工具，以及调用哪个工具、传什么参数。
+
 ## 常见问题
 
 ### Agent 一定需要 LLM 吗？
