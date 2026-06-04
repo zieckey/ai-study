@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -49,9 +51,12 @@ func (l *Logger) Log(function string, fields map[string]any) {
 		fields = map[string]any{}
 	}
 
+	file, line := callerLocation()
 	entry := map[string]any{
 		"ts":       time.Now().Format(time.RFC3339Nano),
 		"function": function,
+		"file":     file,
+		"line":     line,
 	}
 	for key, value := range fields {
 		entry[key] = sanitize(key, value)
@@ -65,6 +70,14 @@ func (l *Logger) Log(function string, fields map[string]any) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	fmt.Fprintf(l.writer, "[trace] %s\n", data)
+}
+
+func callerLocation() (string, int) {
+	_, file, line, ok := runtime.Caller(3)
+	if !ok {
+		return "unknown", 0
+	}
+	return filepath.ToSlash(file), line
 }
 
 func sanitize(key string, value any) any {

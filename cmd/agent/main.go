@@ -33,7 +33,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	logger := trace.NewLogger(os.Stderr, *traceLog)
+	logger := trace.NewLogger(os.Stdout, *traceLog)
 	ctx := trace.WithLogger(context.Background(), logger)
 	trace.Log(ctx, "main.main", map[string]any{
 		"provider":                 *provider,

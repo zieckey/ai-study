@@ -74,7 +74,7 @@ func NewDeepSeekProvider(config DeepSeekConfig) *DeepSeekProvider {
 }
 
 func (p *DeepSeekProvider) Next(ctx context.Context, req Request) (Decision, error) {
-	trace.Log(ctx, "model.DeepSeekProvider.Next.start", map[string]any{"model": p.model, "base_url": p.baseURL, "max_tokens": p.maxTokens, "messages": len(req.Messages), "tools": len(req.Tools), "api_key_set": p.apiKey != ""})
+	trace.Log(ctx, "model.DeepSeekProvider.Next.start", map[string]any{"model": p.model, "base_url": p.baseURL, "max_tokens": p.maxTokens, "messages": req.Messages, "tools": len(req.Tools), "api_key_set": p.apiKey != ""})
 	if p.apiKey == "" {
 		return Decision{}, fmt.Errorf("DEEPSEEK_API_KEY is required for deepseek provider")
 	}
@@ -96,7 +96,7 @@ func (p *DeepSeekProvider) Next(ctx context.Context, req Request) (Decision, err
 		MaxTokens:  p.maxTokens,
 	}
 
-	trace.Log(ctx, "model.DeepSeekProvider.Next.request", map[string]any{"model": body.Model, "messages": len(body.Messages), "tools": len(body.Tools), "tool_choice": body.ToolChoice, "max_tokens": body.MaxTokens})
+	trace.Log(ctx, "model.DeepSeekProvider.Next.request", map[string]any{"model": body.Model, "messages": body.Messages, "tools": body.Tools, "tool_choice": body.ToolChoice, "max_tokens": body.MaxTokens})
 	payload, err := json.Marshal(body)
 	if err != nil {
 		return Decision{}, err
@@ -119,7 +119,7 @@ func (p *DeepSeekProvider) Next(ctx context.Context, req Request) (Decision, err
 	if err != nil {
 		return Decision{}, err
 	}
-	trace.Log(ctx, "model.DeepSeekProvider.Next.http_response", map[string]any{"status": resp.Status, "body_bytes": len(respBody)})
+	trace.Log(ctx, "model.DeepSeekProvider.Next.http_response", map[string]any{"status": resp.Status, "body_bytes": respBody})
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return Decision{}, fmt.Errorf("deepseek API returned %s: %s", resp.Status, strings.TrimSpace(string(respBody)))
 	}
@@ -131,7 +131,7 @@ func (p *DeepSeekProvider) Next(ctx context.Context, req Request) (Decision, err
 	if len(chatResp.Choices) == 0 {
 		return Decision{}, fmt.Errorf("deepseek API returned no choices")
 	}
-	trace.Log(ctx, "model.DeepSeekProvider.Next.response", map[string]any{"choices": len(chatResp.Choices), "tool_calls": len(chatResp.Choices[0].Message.ToolCalls), "content_len": len(chatResp.Choices[0].Message.Content)})
+	trace.Log(ctx, "model.DeepSeekProvider.Next.response", map[string]any{"choices": len(chatResp.Choices), "tool_calls": len(chatResp.Choices[0].Message.ToolCalls), "chatResp": chatResp})
 
 	message := chatResp.Choices[0].Message
 	if len(message.ToolCalls) > 0 {
@@ -155,7 +155,7 @@ func (p *DeepSeekProvider) Next(ctx context.Context, req Request) (Decision, err
 }
 
 func toDeepSeekMessages(ctx context.Context, messages []Message, systemPrompt string) ([]deepSeekMessage, error) {
-	trace.Log(ctx, "model.toDeepSeekMessages", map[string]any{"messages": len(messages), "system_prompt_len": len(systemPrompt)})
+	trace.Log(ctx, "model.toDeepSeekMessages", map[string]any{"messages": messages, "system_prompt_len": len(systemPrompt)})
 	result := []deepSeekMessage{{Role: "system", Content: systemPrompt}}
 	for _, message := range messages {
 		switch message.Role {
@@ -194,7 +194,7 @@ func toDeepSeekMessages(ctx context.Context, messages []Message, systemPrompt st
 }
 
 func toDeepSeekTools(ctx context.Context, toolSpecs []ToolSpec) ([]deepSeekTool, error) {
-	trace.Log(ctx, "model.toDeepSeekTools", map[string]any{"tools": len(toolSpecs)})
+	trace.Log(ctx, "model.toDeepSeekTools", map[string]any{"tools": toolSpecs})
 	tools := make([]deepSeekTool, 0, len(toolSpecs))
 	for _, spec := range toolSpecs {
 		var parameters map[string]any

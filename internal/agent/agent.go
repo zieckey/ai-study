@@ -44,7 +44,7 @@ func (a *Agent) Run(ctx context.Context, goal string) (Result, error) {
 	result := Result{}
 
 	for step := 1; step <= a.config.MaxSteps; step++ {
-		trace.Log(ctx, "agent.Run.step", map[string]any{"step": step, "messages": len(messages)})
+		trace.Log(ctx, "\n\n\nagent.Run.step", map[string]any{"step": step, "messages": messages})
 		decision, err := a.provider.Next(ctx, model.Request{
 			Messages: messages,
 			Tools:    a.toolSpecs(ctx),
@@ -55,7 +55,7 @@ func (a *Agent) Run(ctx context.Context, goal string) (Result, error) {
 
 		switch decision.Type {
 		case model.DecisionFinal:
-			trace.Log(ctx, "agent.Run.decision.final", map[string]any{"step": step, "answer_len": len(decision.Answer)})
+			trace.Log(ctx, "agent.Run.decision.final", map[string]any{"step": step, "answer_len": decision.Answer})
 			result.Answer = decision.Answer
 			result.Trace = append(result.Trace, TraceEvent{Step: step, Decision: "final"})
 			return result, nil
