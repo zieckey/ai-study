@@ -627,6 +627,259 @@ Agent 结束
 
 > 让 DeepSeek 根据用户目标和工具列表，决定下一步是否需要调用工具，以及调用哪个工具、传什么参数。
 
+## 为什么 DeepSeek 能精准返回函数名称
+
+DeepSeek 能精准返回 `calculator`、`weather` 这些函数名，核心原因不是它“读懂了你的 Go 代码”，而是每次请求时，程序都会把可用工具列表、工具名称、工具描述、参数 schema 一起发给 DeepSeek。
+
+也就是说，DeepSeek 不是凭空猜函数名，而是在请求里的 `tools` 列表中做选择。
+
+### 工具名称来自请求里的 function.name
+
+请求中会包含类似这样的工具定义：
+
+```json
+{
+  "type": "function",
+  "function": {
+    "name": "calculator",
+    "description": "计算一个简单的二元四则运算表达式，例如 12 * 23",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "expression": {
+          "type": "string",
+          "description": "简单二元四则运算表达式，例如 12 * 23"
+        }
+      },
+      "required": ["expression"]
+    }
+  }
+}
+```
+
+以及：
+
+```json
+{
+  "type": "function",
+  "function": {
+    "name": "weather",
+    "description": "查询城市天气，当前返回 mock 数据",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "city": {
+          "type": "string",
+          "description": "城市名称，例如 北京、上海、深圳、杭州"
+        }
+      },
+      "required": ["city"]
+    }
+  }
+}
+```
+
+所以用户输入：
+
+```text
+帮我计算 12 * 23，然后查询北京天气，然后计算 10 * 20
+```
+
+模型可以把任务拆成：
+
+```text
+12 * 23        -> calculator({"expression":"12 * 23"})
+查询北京天气    -> weather({"city":"北京"})
+10 * 20        -> calculator({"expression":"10 * 20"})
+```
+
+DeepSeek 返回的 `tool_calls` 里，`function.name` 正是从这些工具定义里选择出来的：
+
+```json
+{
+  "tool_calls": [
+    {
+      "id": "call_1",
+      "type": "function",
+      "function": {
+        "name": "calculator",
+        "arguments": "{\"expression\":\"12 * 23\"}"
+      }
+    }
+  ]
+}
+```
+
+这里的 `calculator` 必须和本地工具注册表里的名字一致。比如本地工具实现中：
+
+```go
+func (Calculator) Name() string {
+    return "calculator"
+}
+```
+
+Agent 才能通过下面的逻辑找到并执行对应工具：
+
+```go
+tool, ok := a.tools[decision.ToolName]
+observation, err := tool.Execute(ctx, decision.Arguments)
+```
+
+所以精准匹配的关键是：
+
+```text
+DeepSeek 返回的 function.name == 本地 Tool.Name()
+```
+
+### System prompt 也会强化工具语义
+
+请求里还会带上 system prompt：
+
+```text
+你可以使用工具完成任务：calculator 负责精确计算，clock 负责获取当前时间，weather 返回 mock 天气，echo 原样返回文本。
+当用户的问题需要外部实时信息、确定性计算或项目提供的工具能力时，请优先调用合适的工具；工具返回 observation 后，再给出简洁的中文最终答案。
+```
+
+这段提示进一步告诉 DeepSeek：
+
+- 计算任务应该使用 `calculator`
+- 天气任务应该使用 `weather`
+- 工具返回后再总结
+
+因此 DeepSeek 不只是看到工具列表，还被明确告知这些工具适合什么场景。
+
+### DeepSeek 返回的是调用意图，不是直接执行函数
+
+DeepSeek 并不会直接执行 Go 函数。它只返回结构化的“调用意图”：
+
+```json
+{
+  "name": "calculator",
+  "arguments": "{\"expression\":\"12 * 23\"}"
+}
+```
+
+真正执行函数的是本地 Agent：
+
+```text
+DeepSeek 返回 tool_calls
+  ↓
+Agent 读取 function.name
+  ↓
+Agent 在本地工具注册表里查找同名工具
+  ↓
+Agent 执行 Go 函数
+```
+
+### 为什么多轮请求还能继续精准选择
+
+每一轮请求都会带上完整上下文，包括之前的工具调用和工具结果。
+
+例如第二轮请求里会包含：
+
+```json
+{
+  "role": "assistant",
+  "tool_calls": [
+    {
+      "id": "call_1",
+      "type": "function",
+      "function": {
+        "name": "calculator",
+        "arguments": "{\"expression\":\"12 * 23\"}"
+      }
+    }
+  ]
+},
+{
+  "role": "tool",
+  "content": "276",
+  "tool_call_id": "call_1"
+}
+```
+
+这告诉 DeepSeek：
+
+```text
+第一个计算任务已经完成，结果是 276。
+```
+
+于是模型会继续判断剩余任务，例如：
+
+```text
+查询北京天气
+计算 10 * 20
+```
+
+并继续选择合适的工具。
+
+### 当前实现一次只执行一个 tool_call
+
+需要注意的是，DeepSeek 一次可能返回多个 `tool_calls`。例如它可能一次性返回：
+
+```json
+"tool_calls": [
+  {
+    "function": {
+      "name": "calculator",
+      "arguments": "{\"expression\": \"12 * 23\"}"
+    }
+  },
+  {
+    "function": {
+      "name": "calculator",
+      "arguments": "{\"expression\": \"10 * 20\"}"
+    }
+  },
+  {
+    "function": {
+      "name": "weather",
+      "arguments": "{\"city\": \"北京\"}"
+    }
+  }
+]
+```
+
+这说明模型已经理解了全部任务。但当前 `DeepSeekProvider.Next()` 只取第一个 tool call：
+
+```go
+toolCall := message.ToolCalls[0]
+```
+
+所以程序实际一轮只执行一个工具。剩下的任务会在后续轮次中，由 DeepSeek 根据上下文重新规划并继续返回。
+
+因此如果你看到 4 次 DeepSeek 交互，通常是：
+
+```text
+第 1 次：DeepSeek 返回一个或多个 tool_calls，程序执行第一个
+第 2 次：DeepSeek 看到第一个工具结果后，继续返回下一个工具调用
+第 3 次：继续执行剩余工具调用
+第 4 次：所有任务完成，DeepSeek 返回最终答案
+```
+
+### 是否总能精准
+
+不一定。虽然工具定义清楚时通常会很准，但模型仍然可能：
+
+- 返回不存在的工具名
+- 参数格式不符合 schema
+- 选择了不合适的工具
+- 一次返回多个 `tool_calls`，但当前 Agent 只处理第一个
+- 把 `arguments` 生成成非法 JSON 字符串
+
+所以 Agent 端必须校验。当前代码已经做了未知工具检查：
+
+```go
+tool, ok := a.tools[decision.ToolName]
+if !ok {
+    return Result{}, fmt.Errorf("unknown tool %q", decision.ToolName)
+}
+```
+
+一句话总结：
+
+> DeepSeek 不是凭空知道 Go 函数名，而是根据每次请求里提供的 `tools` 列表、函数描述、参数 schema 和历史 observation，生成符合 tool calling 协议的 `tool_calls`。
+
 ## 常见问题
 
 ### Agent 一定需要 LLM 吗？

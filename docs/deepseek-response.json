@@ -1,0 +1,142 @@
+{
+    "1":
+    {
+        "chatResp":
+        {
+            "choices":
+            [
+                {
+                    "message":
+                    {
+                        "role": "assistant",
+                        "content": "好的，我来依次处理这些任务。\n\n首先，12 * 23 和 10 * 20 之间没有依赖关系，可以先并行计算，同时查询北京天气。",
+                        "tool_calls":
+                        [
+                            {
+                                "id": "call_00_abPRo7HYSkYRlKpBHsa59299",
+                                "type": "function",
+                                "function":
+                                {
+                                    "name": "calculator",
+                                    "arguments": "{\"expression\": \"12 * 23\"}"
+                                }
+                            },
+                            {
+                                "id": "call_01_SeHwRF6Iu5ZGDFFil1qE3009",
+                                "type": "function",
+                                "function":
+                                {
+                                    "name": "calculator",
+                                    "arguments": "{\"expression\": \"10 * 20\"}"
+                                }
+                            },
+                            {
+                                "id": "call_02_kDZmpKodksC3W9aVobla5208",
+                                "type": "function",
+                                "function":
+                                {
+                                    "name": "weather",
+                                    "arguments": "{\"city\": \"北京\"}"
+                                }
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        "choices": 1,
+        "file": "/Users/weizili/workspace/goworkspace/src/github.com/zieckey/ai-study/internal/model/deepseek.go",
+        "function": "model.DeepSeekProvider.Next.response",
+        "line": 134,
+        "tool_calls": 3,
+        "ts": "2026-06-03T21:41:14.422616+08:00"
+    },
+    "2":
+    {
+        "chatResp":
+        {
+            "choices":
+            [
+                {
+                    "message":
+                    {
+                        "role": "assistant",
+                        "tool_calls":
+                        [
+                            {
+                                "id": "call_00_fESObNpRdpzDynfMOjxN5157",
+                                "type": "function",
+                                "function":
+                                {
+                                    "name": "weather",
+                                    "arguments": "{\"city\": \"北京\"}"
+                                }
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        "choices": 1,
+        "file": "/Users/weizili/workspace/goworkspace/src/github.com/zieckey/ai-study/internal/model/deepseek.go",
+        "function": "model.DeepSeekProvider.Next.response",
+        "line": 134,
+        "tool_calls": 1,
+        "ts": "2026-06-03T21:41:15.160435+08:00"
+    },
+    "3":
+    {
+        "chatResp":
+        {
+            "choices":
+            [
+                {
+                    "message":
+                    {
+                        "role": "assistant",
+                        "tool_calls":
+                        [
+                            {
+                                "id": "call_00_j4Bc2ptOpbVs6DiGlGBd8298",
+                                "type": "function",
+                                "function":
+                                {
+                                    "name": "calculator",
+                                    "arguments": "{\"expression\": \"10 * 20\"}"
+                                }
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+        "choices": 1,
+        "file": "/Users/weizili/workspace/goworkspace/src/github.com/zieckey/ai-study/internal/model/deepseek.go",
+        "function": "model.DeepSeekProvider.Next.response",
+        "line": 134,
+        "tool_calls": 1,
+        "ts": "2026-06-03T21:41:15.937409+08:00"
+    },
+    "4":
+    {
+        "chatResp":
+        {
+            "choices":
+            [
+                {
+                    "message":
+                    {
+                        "role": "assistant",
+                        "content": "好的，所有结果如下：\n\n1. **12 × 23 = 276** ✅\n2. **北京天气：** 晴，25°C ☀️\n3. **10 × 20 = 200** ✅"
+                    }
+                }
+            ]
+        },
+        "choices": 1,
+        "file": "/Users/weizili/workspace/goworkspace/src/github.com/zieckey/ai-study/internal/model/deepseek.go",
+        "function": "model.DeepSeekProvider.Next.response",
+        "line": 134,
+        "tool_calls": 0,
+        "ts": "2026-06-03T21:41:17.085577+08:00"
+    }
+}

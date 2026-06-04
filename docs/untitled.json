@@ -1,0 +1,605 @@
+{
+    "1":
+    {
+        "file": "/Users/weizili/workspace/goworkspace/src/github.com/zieckey/ai-study/internal/model/deepseek.go",
+        "function": "model.DeepSeekProvider.Next.request",
+        "line": 99,
+        "max_tokens": 4096,
+        "messages":
+        [
+            {
+                "role": "system",
+                "content": "你是这个 Go 学习项目里的 DeepSeek provider。\n你可以使用工具完成任务：calculator 负责精确计算，clock 负责获取当前时间，weather 返回 mock 天气，echo 原样返回文本。\n当用户的问题需要外部实时信息、确定性计算或项目提供的工具能力时，请优先调用合适的工具；工具返回 observation 后，再给出简洁的中文最终答案。"
+            },
+            {
+                "role": "user",
+                "content": "帮我计算 12 * 23，然后查询北京天气，然后计算 10 * 20 -json"
+            }
+        ],
+        "model": "deepseek-chat",
+        "tool_choice": "auto",
+        "tools":
+        [
+            {
+                "type": "function",
+                "function":
+                {
+                    "name": "weather",
+                    "description": "查询城市天气，当前返回 mock 数据",
+                    "parameters":
+                    {
+                        "additionalProperties": false,
+                        "properties":
+                        {
+                            "city":
+                            {
+                                "description": "城市名称，例如 北京、上海、深圳、杭州",
+                                "type": "string"
+                            }
+                        },
+                        "required":
+                        [
+                            "city"
+                        ],
+                        "type": "object"
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function":
+                {
+                    "name": "calculator",
+                    "description": "计算一个简单的二元四则运算表达式，例如 12 * 23",
+                    "parameters":
+                    {
+                        "additionalProperties": false,
+                        "properties":
+                        {
+                            "expression":
+                            {
+                                "description": "简单二元四则运算表达式，例如 12 * 23",
+                                "type": "string"
+                            }
+                        },
+                        "required":
+                        [
+                            "expression"
+                        ],
+                        "type": "object"
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function":
+                {
+                    "name": "clock",
+                    "description": "返回当前本地时间",
+                    "parameters":
+                    {
+                        "additionalProperties": false,
+                        "properties":
+                        {
+                            "format":
+                            {
+                                "description": "可选的 Go time layout，例如 2006-01-02 15:04:05",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function":
+                {
+                    "name": "echo",
+                    "description": "原样返回输入文本",
+                    "parameters":
+                    {
+                        "additionalProperties": false,
+                        "properties":
+                        {
+                            "text":
+                            {
+                                "description": "需要原样返回的文本",
+                                "type": "string"
+                            }
+                        },
+                        "required":
+                        [
+                            "text"
+                        ],
+                        "type": "object"
+                    }
+                }
+            }
+        ],
+        "ts": "2026-06-03T21:41:12.95859+08:00"
+    },
+    "2":
+    {
+        "file": "/Users/weizili/workspace/goworkspace/src/github.com/zieckey/ai-study/internal/model/deepseek.go",
+        "function": "model.DeepSeekProvider.Next.request",
+        "line": 99,
+        "max_tokens": 4096,
+        "messages":
+        [
+            {
+                "role": "system",
+                "content": "你是这个 Go 学习项目里的 DeepSeek provider。\n你可以使用工具完成任务：calculator 负责精确计算，clock 负责获取当前时间，weather 返回 mock 天气，echo 原样返回文本。\n当用户的问题需要外部实时信息、确定性计算或项目提供的工具能力时，请优先调用合适的工具；工具返回 observation 后，再给出简洁的中文最终答案。"
+            },
+            {
+                "role": "user",
+                "content": "帮我计算 12 * 23，然后查询北京天气，然后计算 10 * 20 -json"
+            },
+            {
+                "role": "assistant",
+                "content": "好的，我来依次处理这些任务。\n\n首先，12 * 23 和 10 * 20 之间没有依赖关系，可以先并行计算，同时查询北京天气。",
+                "tool_calls":
+                [
+                    {
+                        "id": "call_00_abPRo7HYSkYRlKpBHsa59299",
+                        "type": "function",
+                        "function":
+                        {
+                            "name": "calculator",
+                            "arguments": "{\"expression\": \"12 * 23\"}"
+                        }
+                    }
+                ]
+            },
+            {
+                "role": "tool",
+                "content": "276",
+                "tool_call_id": "call_00_abPRo7HYSkYRlKpBHsa59299"
+            }
+        ],
+        "model": "deepseek-chat",
+        "tool_choice": "auto",
+        "tools":
+        [
+            {
+                "type": "function",
+                "function":
+                {
+                    "name": "calculator",
+                    "description": "计算一个简单的二元四则运算表达式，例如 12 * 23",
+                    "parameters":
+                    {
+                        "additionalProperties": false,
+                        "properties":
+                        {
+                            "expression":
+                            {
+                                "description": "简单二元四则运算表达式，例如 12 * 23",
+                                "type": "string"
+                            }
+                        },
+                        "required":
+                        [
+                            "expression"
+                        ],
+                        "type": "object"
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function":
+                {
+                    "name": "clock",
+                    "description": "返回当前本地时间",
+                    "parameters":
+                    {
+                        "additionalProperties": false,
+                        "properties":
+                        {
+                            "format":
+                            {
+                                "description": "可选的 Go time layout，例如 2006-01-02 15:04:05",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function":
+                {
+                    "name": "echo",
+                    "description": "原样返回输入文本",
+                    "parameters":
+                    {
+                        "additionalProperties": false,
+                        "properties":
+                        {
+                            "text":
+                            {
+                                "description": "需要原样返回的文本",
+                                "type": "string"
+                            }
+                        },
+                        "required":
+                        [
+                            "text"
+                        ],
+                        "type": "object"
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function":
+                {
+                    "name": "weather",
+                    "description": "查询城市天气，当前返回 mock 数据",
+                    "parameters":
+                    {
+                        "additionalProperties": false,
+                        "properties":
+                        {
+                            "city":
+                            {
+                                "description": "城市名称，例如 北京、上海、深圳、杭州",
+                                "type": "string"
+                            }
+                        },
+                        "required":
+                        [
+                            "city"
+                        ],
+                        "type": "object"
+                    }
+                }
+            }
+        ],
+        "ts": "2026-06-03T21:41:14.424582+08:00"
+    },
+    "3":
+    {
+        "file": "/Users/weizili/workspace/goworkspace/src/github.com/zieckey/ai-study/internal/model/deepseek.go",
+        "function": "model.DeepSeekProvider.Next.request",
+        "line": 99,
+        "max_tokens": 4096,
+        "messages":
+        [
+            {
+                "role": "system",
+                "content": "你是这个 Go 学习项目里的 DeepSeek provider。\n你可以使用工具完成任务：calculator 负责精确计算，clock 负责获取当前时间，weather 返回 mock 天气，echo 原样返回文本。\n当用户的问题需要外部实时信息、确定性计算或项目提供的工具能力时，请优先调用合适的工具；工具返回 observation 后，再给出简洁的中文最终答案。"
+            },
+            {
+                "role": "user",
+                "content": "帮我计算 12 * 23，然后查询北京天气，然后计算 10 * 20 -json"
+            },
+            {
+                "role": "assistant",
+                "content": "好的，我来依次处理这些任务。\n\n首先，12 * 23 和 10 * 20 之间没有依赖关系，可以先并行计算，同时查询北京天气。",
+                "tool_calls":
+                [
+                    {
+                        "id": "call_00_abPRo7HYSkYRlKpBHsa59299",
+                        "type": "function",
+                        "function":
+                        {
+                            "name": "calculator",
+                            "arguments": "{\"expression\": \"12 * 23\"}"
+                        }
+                    }
+                ]
+            },
+            {
+                "role": "tool",
+                "content": "276",
+                "tool_call_id": "call_00_abPRo7HYSkYRlKpBHsa59299"
+            },
+            {
+                "role": "assistant",
+                "tool_calls":
+                [
+                    {
+                        "id": "call_00_fESObNpRdpzDynfMOjxN5157",
+                        "type": "function",
+                        "function":
+                        {
+                            "name": "weather",
+                            "arguments": "{\"city\": \"北京\"}"
+                        }
+                    }
+                ]
+            },
+            {
+                "role": "tool",
+                "content": "北京：晴，25°C",
+                "tool_call_id": "call_00_fESObNpRdpzDynfMOjxN5157"
+            }
+        ],
+        "model": "deepseek-chat",
+        "tool_choice": "auto",
+        "tools":
+        [
+            {
+                "type": "function",
+                "function":
+                {
+                    "name": "clock",
+                    "description": "返回当前本地时间",
+                    "parameters":
+                    {
+                        "additionalProperties": false,
+                        "properties":
+                        {
+                            "format":
+                            {
+                                "description": "可选的 Go time layout，例如 2006-01-02 15:04:05",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function":
+                {
+                    "name": "echo",
+                    "description": "原样返回输入文本",
+                    "parameters":
+                    {
+                        "additionalProperties": false,
+                        "properties":
+                        {
+                            "text":
+                            {
+                                "description": "需要原样返回的文本",
+                                "type": "string"
+                            }
+                        },
+                        "required":
+                        [
+                            "text"
+                        ],
+                        "type": "object"
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function":
+                {
+                    "name": "weather",
+                    "description": "查询城市天气，当前返回 mock 数据",
+                    "parameters":
+                    {
+                        "additionalProperties": false,
+                        "properties":
+                        {
+                            "city":
+                            {
+                                "description": "城市名称，例如 北京、上海、深圳、杭州",
+                                "type": "string"
+                            }
+                        },
+                        "required":
+                        [
+                            "city"
+                        ],
+                        "type": "object"
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function":
+                {
+                    "name": "calculator",
+                    "description": "计算一个简单的二元四则运算表达式，例如 12 * 23",
+                    "parameters":
+                    {
+                        "additionalProperties": false,
+                        "properties":
+                        {
+                            "expression":
+                            {
+                                "description": "简单二元四则运算表达式，例如 12 * 23",
+                                "type": "string"
+                            }
+                        },
+                        "required":
+                        [
+                            "expression"
+                        ],
+                        "type": "object"
+                    }
+                }
+            }
+        ],
+        "ts": "2026-06-03T21:41:15.161073+08:00"
+    },
+    "4":
+    {
+        "file": "/Users/weizili/workspace/goworkspace/src/github.com/zieckey/ai-study/internal/model/deepseek.go",
+        "function": "model.DeepSeekProvider.Next.request",
+        "line": 99,
+        "max_tokens": 4096,
+        "messages":
+        [
+            {
+                "role": "system",
+                "content": "你是这个 Go 学习项目里的 DeepSeek provider。\n你可以使用工具完成任务：calculator 负责精确计算，clock 负责获取当前时间，weather 返回 mock 天气，echo 原样返回文本。\n当用户的问题需要外部实时信息、确定性计算或项目提供的工具能力时，请优先调用合适的工具；工具返回 observation 后，再给出简洁的中文最终答案。"
+            },
+            {
+                "role": "user",
+                "content": "帮我计算 12 * 23，然后查询北京天气，然后计算 10 * 20 -json"
+            },
+            {
+                "role": "assistant",
+                "content": "好的，我来依次处理这些任务。\n\n首先，12 * 23 和 10 * 20 之间没有依赖关系，可以先并行计算，同时查询北京天气。",
+                "tool_calls":
+                [
+                    {
+                        "id": "call_00_abPRo7HYSkYRlKpBHsa59299",
+                        "type": "function",
+                        "function":
+                        {
+                            "name": "calculator",
+                            "arguments": "{\"expression\": \"12 * 23\"}"
+                        }
+                    }
+                ]
+            },
+            {
+                "role": "tool",
+                "content": "276",
+                "tool_call_id": "call_00_abPRo7HYSkYRlKpBHsa59299"
+            },
+            {
+                "role": "assistant",
+                "tool_calls":
+                [
+                    {
+                        "id": "call_00_fESObNpRdpzDynfMOjxN5157",
+                        "type": "function",
+                        "function":
+                        {
+                            "name": "weather",
+                            "arguments": "{\"city\": \"北京\"}"
+                        }
+                    }
+                ]
+            },
+            {
+                "role": "tool",
+                "content": "北京：晴，25°C",
+                "tool_call_id": "call_00_fESObNpRdpzDynfMOjxN5157"
+            },
+            {
+                "role": "assistant",
+                "tool_calls":
+                [
+                    {
+                        "id": "call_00_j4Bc2ptOpbVs6DiGlGBd8298",
+                        "type": "function",
+                        "function":
+                        {
+                            "name": "calculator",
+                            "arguments": "{\"expression\": \"10 * 20\"}"
+                        }
+                    }
+                ]
+            },
+            {
+                "role": "tool",
+                "content": "200",
+                "tool_call_id": "call_00_j4Bc2ptOpbVs6DiGlGBd8298"
+            }
+        ],
+        "model": "deepseek-chat",
+        "tool_choice": "auto",
+        "tools":
+        [
+            {
+                "type": "function",
+                "function":
+                {
+                    "name": "calculator",
+                    "description": "计算一个简单的二元四则运算表达式，例如 12 * 23",
+                    "parameters":
+                    {
+                        "additionalProperties": false,
+                        "properties":
+                        {
+                            "expression":
+                            {
+                                "description": "简单二元四则运算表达式，例如 12 * 23",
+                                "type": "string"
+                            }
+                        },
+                        "required":
+                        [
+                            "expression"
+                        ],
+                        "type": "object"
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function":
+                {
+                    "name": "clock",
+                    "description": "返回当前本地时间",
+                    "parameters":
+                    {
+                        "additionalProperties": false,
+                        "properties":
+                        {
+                            "format":
+                            {
+                                "description": "可选的 Go time layout，例如 2006-01-02 15:04:05",
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function":
+                {
+                    "name": "echo",
+                    "description": "原样返回输入文本",
+                    "parameters":
+                    {
+                        "additionalProperties": false,
+                        "properties":
+                        {
+                            "text":
+                            {
+                                "description": "需要原样返回的文本",
+                                "type": "string"
+                            }
+                        },
+                        "required":
+                        [
+                            "text"
+                        ],
+                        "type": "object"
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function":
+                {
+                    "name": "weather",
+                    "description": "查询城市天气，当前返回 mock 数据",
+                    "parameters":
+                    {
+                        "additionalProperties": false,
+                        "properties":
+                        {
+                            "city":
+                            {
+                                "description": "城市名称，例如 北京、上海、深圳、杭州",
+                                "type": "string"
+                            }
+                        },
+                        "required":
+                        [
+                            "city"
+                        ],
+                        "type": "object"
+                    }
+                }
+            }
+        ],
+        "ts": "2026-06-03T21:41:15.938406+08:00"
+    }
+}
