@@ -23,6 +23,7 @@ func main() {
 	deepSeekMaxTokens := flag.Int64("deepseek-max-tokens", 4096, "DeepSeek provider 单次模型响应的最大 token 数")
 	showTrace := flag.Bool("trace", true, "是否打印执行过程")
 	traceLog := flag.Bool("trace-log", true, "是否打印函数级 trace log 到 stderr")
+	skillDir := flag.String("skill-dir", "skills", "本地 Markdown skills 目录")
 	jsonOutput := flag.Bool("json", false, "以 JSON 格式输出 goal、trace 和 answer")
 	flag.Parse()
 
@@ -44,6 +45,7 @@ func main() {
 		"max_steps":                *maxSteps,
 		"show_trace":               *showTrace,
 		"json_output":              *jsonOutput,
+		"skill_dir":                *skillDir,
 		"goal":                     goal,
 		"anthropic_api_key_set":    os.Getenv("ANTHROPIC_API_KEY") != "",
 		"deepseek_api_key_set":     os.Getenv("DEEPSEEK_API_KEY") != "",
@@ -61,7 +63,7 @@ func main() {
 		tools.Clock{},
 		tools.Echo{},
 		tools.Weather{},
-	}, agent.Config{MaxSteps: *maxSteps})
+	}, agent.Config{MaxSteps: *maxSteps, SkillDir: *skillDir})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

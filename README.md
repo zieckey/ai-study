@@ -1,5 +1,7 @@
 # Golang AI Agent 入门项目
 
+最开始的prompt：“我想创建一个golang的简单项目，帮我学习如何编写AI Agent，把原理和实现都做详细讲解”。
+
 这个项目用 Go 从零实现一个最小但完整的 AI Agent。默认使用规则驱动的 `mock` 模型来模拟 LLM 的工具调用能力，不需要 API Key 就能运行；同时也支持 `anthropic` 和 `deepseek` provider，用真实大模型演示 tool use。
 
 ## 你会学到什么
@@ -185,11 +187,13 @@ go test ./...
 ├── internal/model/mock.go         # 规则驱动的 mock 模型
 ├── internal/model/anthropic.go    # 真实 Claude/Anthropic tool use provider
 ├── internal/model/deepseek.go     # 真实 DeepSeek tool calling provider
+├── internal/skills/               # 本地 Markdown skill 加载与选择
 ├── internal/tools/tool.go         # 工具接口和注册表
 ├── internal/tools/calculator.go   # 计算器工具
 ├── internal/tools/clock.go        # 当前时间工具
 ├── internal/tools/echo.go         # 回显工具
-└── internal/tools/weather.go      # mock 天气工具
+├── internal/tools/weather.go      # mock 天气工具
+└── skills/                        # 示例 skill 文件
 ```
 
 ## 核心实现讲解
@@ -262,7 +266,74 @@ return max steps error
 
 这个循环体现了 Agent 的本质：Agent 不是某个单独的模型，而是一个控制器。它负责维护状态、询问模型、执行工具、处理结果、判断是否结束。
 
-### 4. Trace 为什么重要
+### 4. Skill 如何按需增强模型
+
+Skill 是给模型看的专项说明书，不直接执行代码。它和工具的区别是：
+
+```text
+Tool  = Go 程序真正执行的能力，例如 calculator/weather
+Skill = 模型回答时参考的任务策略、领域知识、输出格式说明
+```
+
+本项目支持本地 Markdown skill。默认从 `skills/` 目录加载：
+
+```text
+skills/
+├── agent-teacher.md
+├── math-tutor.md
+└── travel-planner.md
+```
+
+每个 skill 文件包含 frontmatter 和正文：
+
+```md
+---
+name: agent-teacher
+description: 当用户想学习 AI Agent 原理、tool_calls、provider、trace log、模型交互流程时使用
+---
+
+你是一个 AI Agent 教学助手。
+回答时遵循：
+1. 先解释原理
+2. 再对应到本项目代码
+3. 最后给一个运行例子
+```
+
+运行时流程是：
+
+```text
+用户 goal
+  ↓
+internal/skills.LoadDir() 加载 skills/*.md
+  ↓
+internal/skills.Select() 根据关键词选择相关 skill
+  ↓
+Agent 把 selected skills 放进 model.Request
+  ↓
+DeepSeek/Anthropic provider 把 skill 内容拼到 system prompt
+  ↓
+模型按专项说明回答
+```
+
+默认 selector 是简单关键词匹配，例如：
+
+- `agent`、`tool_calls`、`provider`、`trace`、`deepseek` -> `agent-teacher`
+- `计算`、`数学`、`讲解`、`*`、`/` -> `math-tutor`
+- `旅行`、`行程`、`预算`、`景点` -> `travel-planner`
+
+可以用 `-skill-dir` 指定其他 skill 目录：
+
+```bash
+go run ./cmd/agent -skill-dir skills "请讲解 DeepSeek 的 tool_calls"
+```
+
+如果你不想加载本地 skills，可以指向一个不存在或空目录：
+
+```bash
+go run ./cmd/agent -skill-dir /tmp/empty-skills "查询北京天气"
+```
+
+### 5. Trace 为什么重要
 
 CLI 默认打印 trace：
 

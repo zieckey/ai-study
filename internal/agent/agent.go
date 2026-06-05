@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/zieckey/ai-study/internal/model"
+	"github.com/zieckey/ai-study/internal/skills"
 	"github.com/zieckey/ai-study/internal/tools"
 	"github.com/zieckey/ai-study/internal/trace"
 )
@@ -14,11 +15,12 @@ import (
 type Agent struct {
 	provider model.Provider
 	tools    map[string]tools.Tool
+	skills   []skills.Skill
 	config   Config
 }
 
 func New(ctx context.Context, provider model.Provider, registeredTools []tools.Tool, config Config) (*Agent, error) {
-	trace.Log(ctx, "agent.New", map[string]any{"tools": len(registeredTools), "max_steps": config.MaxSteps})
+	trace.Log(ctx, "agent.New", map[string]any{"tools": len(registeredTools), "max_steps": config.MaxSteps, "skill_dir": config.SkillDir})
 	if provider == nil {
 		return nil, errors.New("model provider is required")
 	}
@@ -31,9 +33,15 @@ func New(ctx context.Context, provider model.Provider, registeredTools []tools.T
 		return nil, err
 	}
 
+	loadedSkills, err := skills.LoadDir(ctx, config.SkillDir)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Agent{
 		provider: provider,
 		tools:    toolMap,
+		skills:   loadedSkills,
 		config:   config,
 	}, nil
 }
@@ -41,6 +49,7 @@ func New(ctx context.Context, provider model.Provider, registeredTools []tools.T
 func (a *Agent) Run(ctx context.Context, goal string) (Result, error) {
 	trace.Log(ctx, "agent.Run.start", map[string]any{"goal": goal, "max_steps": a.config.MaxSteps, "tools": len(a.tools)})
 	messages := []model.Message{{Role: model.RoleUser, Content: goal}}
+	selectedSkills := skills.Select(ctx, goal, a.skills)
 	result := Result{}
 
 	for step := 1; step <= a.config.MaxSteps; step++ {
@@ -48,6 +57,7 @@ func (a *Agent) Run(ctx context.Context, goal string) (Result, error) {
 		decision, err := a.provider.Next(ctx, model.Request{
 			Messages: messages,
 			Tools:    a.toolSpecs(ctx),
+			Skills:   skillSpecs(selectedSkills),
 		})
 		if err != nil {
 			return Result{}, fmt.Errorf("model decision failed: %w", err)
@@ -90,6 +100,14 @@ func (a *Agent) Run(ctx context.Context, goal string) (Result, error) {
 	}
 
 	return Result{}, fmt.Errorf("agent stopped after %d steps without final answer", a.config.MaxSteps)
+}
+
+func skillSpecs(selected []skills.Skill) []model.SkillSpec {
+	specs := make([]model.SkillSpec, 0, len(selected))
+	for _, skill := range selected {
+		specs = append(specs, model.SkillSpec{Name: skill.Name, Description: skill.Description, Content: skill.Content})
+	}
+	return specs
 }
 
 func (a *Agent) toolSpecs(ctx context.Context) []model.ToolSpec {

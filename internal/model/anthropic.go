@@ -53,7 +53,7 @@ func NewAnthropicProvider(config AnthropicConfig) *AnthropicProvider {
 }
 
 func (p *AnthropicProvider) Next(ctx context.Context, req Request) (Decision, error) {
-	trace.Log(ctx, "model.AnthropicProvider.Next.start", map[string]any{"model": p.model, "max_tokens": p.maxTokens, "effort": p.effort, "messages": len(req.Messages), "tools": len(req.Tools)})
+	trace.Log(ctx, "model.AnthropicProvider.Next.start", map[string]any{"model": p.model, "max_tokens": p.maxTokens, "effort": p.effort, "messages": len(req.Messages), "tools": len(req.Tools), "skills": len(req.Skills)})
 	messages, err := toAnthropicMessages(ctx, req.Messages)
 	if err != nil {
 		return Decision{}, err
@@ -64,12 +64,13 @@ func (p *AnthropicProvider) Next(ctx context.Context, req Request) (Decision, er
 	}
 
 	adaptive := anthropic.ThinkingConfigAdaptiveParam{}
-	trace.Log(ctx, "model.AnthropicProvider.Next.request", map[string]any{"model": p.model, "messages": len(messages), "tools": len(anthropicTools)})
+	systemPrompt := withSkills(p.systemPrompt, req.Skills)
+	trace.Log(ctx, "model.AnthropicProvider.Next.request", map[string]any{"model": p.model, "messages": len(messages), "tools": len(anthropicTools), "skills": len(req.Skills), "system_prompt_len": len(systemPrompt)})
 	resp, err := p.client.Messages.New(ctx, anthropic.MessageNewParams{
 		Model:     p.model,
 		MaxTokens: p.maxTokens,
 		System: []anthropic.TextBlockParam{{
-			Text:         p.systemPrompt,
+			Text:         systemPrompt,
 			CacheControl: anthropic.NewCacheControlEphemeralParam(),
 		}},
 		Thinking: anthropic.ThinkingConfigParamUnion{OfAdaptive: &adaptive},

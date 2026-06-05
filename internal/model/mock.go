@@ -17,7 +17,7 @@ func NewMockProvider() *MockProvider {
 }
 
 func (p *MockProvider) Next(ctx context.Context, req Request) (Decision, error) {
-	trace.Log(ctx, "model.MockProvider.Next.start", map[string]any{"messages": len(req.Messages), "tools": len(req.Tools)})
+	trace.Log(ctx, "model.MockProvider.Next.start", map[string]any{"messages": req.Messages, "tools": req.Tools, "skills": req.Skills})
 	if len(req.Messages) == 0 {
 		return Decision{}, fmt.Errorf("messages are required")
 	}
@@ -42,6 +42,9 @@ func (p *MockProvider) Next(ctx context.Context, req Request) (Decision, error) 
 	if text := textToRepeat(ctx, goal); text != "" {
 		return toolCall(ctx, "echo", map[string]string{"text": text})
 	}
+	if len(req.Skills) > 0 {
+		return Decision{Type: DecisionFinal, Answer: mockSkillAnswer(req.Skills)}, nil
+	}
 
 	answer := "我还没有识别出需要调用的工具。你可以试试：帮我计算 12 * 23、现在几点、请重复 hello agent。"
 	trace.Log(ctx, "model.MockProvider.Next.fallback", map[string]any{"goal": goal, "answer_len": len(answer)})
@@ -55,6 +58,14 @@ func toolCall(ctx context.Context, name string, args map[string]string) (Decisio
 		return Decision{}, err
 	}
 	return Decision{Type: DecisionToolCall, ToolName: name, Arguments: raw}, nil
+}
+
+func mockSkillAnswer(selected []SkillSpec) string {
+	names := make([]string, 0, len(selected))
+	for _, skill := range selected {
+		names = append(names, skill.Name)
+	}
+	return fmt.Sprintf("mock provider 已选择相关 skills：%s。真实 provider 会把这些 skill 内容注入 system prompt，用来指导回答风格和任务策略。", strings.Join(names, ", "))
 }
 
 func finalFromObservation(ctx context.Context, messages []Message) Decision {

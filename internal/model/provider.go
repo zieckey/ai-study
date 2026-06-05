@@ -27,9 +27,16 @@ type ToolSpec struct {
 	InputSchema string `json:"input_schema"`
 }
 
+type SkillSpec struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Content     string `json:"content"`
+}
+
 type Request struct {
-	Messages []Message  `json:"messages"`
-	Tools    []ToolSpec `json:"tools"`
+	Messages []Message   `json:"messages"`
+	Tools    []ToolSpec  `json:"tools"`
+	Skills   []SkillSpec `json:"skills,omitempty"`
 }
 
 type DecisionType string

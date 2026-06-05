@@ -4,6 +4,7 @@ import "encoding/json"
 
 type Config struct {
 	MaxSteps int
+	SkillDir string
 }
 
 type Result struct {

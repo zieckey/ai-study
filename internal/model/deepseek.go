@@ -74,12 +74,13 @@ func NewDeepSeekProvider(config DeepSeekConfig) *DeepSeekProvider {
 }
 
 func (p *DeepSeekProvider) Next(ctx context.Context, req Request) (Decision, error) {
-	trace.Log(ctx, "model.DeepSeekProvider.Next.start", map[string]any{"model": p.model, "base_url": p.baseURL, "max_tokens": p.maxTokens, "messages": req.Messages, "tools": len(req.Tools), "api_key_set": p.apiKey != ""})
+	trace.Log(ctx, "model.DeepSeekProvider.Next.start", map[string]any{"model": p.model, "base_url": p.baseURL, "max_tokens": p.maxTokens, "messages": req.Messages, "tools": len(req.Tools), "skills": len(req.Skills), "api_key_set": p.apiKey != ""})
 	if p.apiKey == "" {
 		return Decision{}, fmt.Errorf("DEEPSEEK_API_KEY is required for deepseek provider")
 	}
 
-	messages, err := toDeepSeekMessages(ctx, req.Messages, p.systemPrompt)
+	systemPrompt := withSkills(p.systemPrompt, req.Skills)
+	messages, err := toDeepSeekMessages(ctx, req.Messages, systemPrompt)
 	if err != nil {
 		return Decision{}, err
 	}
@@ -96,7 +97,7 @@ func (p *DeepSeekProvider) Next(ctx context.Context, req Request) (Decision, err
 		MaxTokens:  p.maxTokens,
 	}
 
-	trace.Log(ctx, "model.DeepSeekProvider.Next.request", map[string]any{"model": body.Model, "messages": body.Messages, "tools": body.Tools, "tool_choice": body.ToolChoice, "max_tokens": body.MaxTokens})
+	trace.Log(ctx, "model.DeepSeekProvider.Next.request", map[string]any{"model": body.Model, "messages": body.Messages, "tools": body.Tools, "skills": len(req.Skills), "tool_choice": body.ToolChoice, "max_tokens": body.MaxTokens})
 	payload, err := json.Marshal(body)
 	if err != nil {
 		return Decision{}, err
