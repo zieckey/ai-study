@@ -1,6 +1,7 @@
 package trace
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -23,7 +25,7 @@ type Logger struct {
 
 func NewLogger(writer io.Writer, enabled bool) *Logger {
 	if writer == nil {
-		writer = os.Stderr
+		writer = os.Stdout
 	}
 	return &Logger{writer: writer, enabled: enabled}
 }
@@ -51,18 +53,16 @@ func (l *Logger) Log(function string, fields map[string]any) {
 		fields = map[string]any{}
 	}
 
-	file, line := callerLocation()
 	entry := map[string]any{
+		"location": callerLocation(),
 		"ts":       time.Now().Format(time.RFC3339Nano),
 		"function": function,
-		"file":     file,
-		"line":     line,
 	}
 	for key, value := range fields {
 		entry[key] = sanitize(key, value)
 	}
 
-	data, err := json.Marshal(entry)
+	data, err := marshalEntry(entry)
 	if err != nil {
 		data = []byte(fmt.Sprintf(`{"ts":%q,"function":%q,"error":%q}`, time.Now().Format(time.RFC3339Nano), function, err.Error()))
 	}
@@ -72,12 +72,57 @@ func (l *Logger) Log(function string, fields map[string]any) {
 	fmt.Fprintf(l.writer, "[trace] %s\n", data)
 }
 
-func callerLocation() (string, int) {
+func marshalEntry(entry map[string]any) ([]byte, error) {
+	var buffer bytes.Buffer
+	buffer.WriteByte('{')
+	first := true
+	for _, key := range orderedKeys(entry) {
+		keyData, err := json.Marshal(key)
+		if err != nil {
+			return nil, err
+		}
+		valueData, err := json.Marshal(entry[key])
+		if err != nil {
+			return nil, err
+		}
+		if !first {
+			buffer.WriteByte(',')
+		}
+		first = false
+		buffer.Write(keyData)
+		buffer.WriteByte(':')
+		buffer.Write(valueData)
+	}
+	buffer.WriteByte('}')
+	return buffer.Bytes(), nil
+}
+
+func orderedKeys(entry map[string]any) []string {
+	keys := make([]string, 0, len(entry))
+	for key := range entry {
+		if key != "location" {
+			keys = append(keys, key)
+		}
+	}
+	sort.Strings(keys)
+	return append([]string{"location"}, keys...)
+}
+
+func callerLocation() string {
 	_, file, line, ok := runtime.Caller(3)
 	if !ok {
-		return "unknown", 0
+		return "unknown:0"
 	}
-	return filepath.ToSlash(file), line
+	return fmt.Sprintf("%s:%d", projectRelativePath(file), line)
+}
+
+func projectRelativePath(file string) string {
+	file = filepath.ToSlash(file)
+	marker := "/ai-study/"
+	if idx := strings.LastIndex(file, marker); idx >= 0 {
+		return file[idx+len(marker):]
+	}
+	return filepath.Base(file)
 }
 
 func sanitize(key string, value any) any {

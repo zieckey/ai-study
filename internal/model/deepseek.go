@@ -80,6 +80,7 @@ func (p *DeepSeekProvider) Next(ctx context.Context, req Request) (Decision, err
 	}
 
 	systemPrompt := withSkills(p.systemPrompt, req.Skills)
+	trace.Log(ctx, "model.DeepSeekProvider.Next.prepareSkill", map[string]any{"systemPrompt": systemPrompt})
 	messages, err := toDeepSeekMessages(ctx, req.Messages, systemPrompt)
 	if err != nil {
 		return Decision{}, err
