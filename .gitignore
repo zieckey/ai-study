@@ -2,3 +2,6 @@
 .claude
 .claude-app
 main
+.DS_Store
+# Added by CJADK
+log/app.log
