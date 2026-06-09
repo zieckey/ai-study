@@ -78,6 +78,8 @@ func main() {
 		tools.Echo{},
 		tools.Weather{},
 		tools.Memory{Store: memoryStore},
+		tools.FileSearch{Root: "."},
+		tools.ReadFile{Root: "."},
 	}, agent.Config{MaxSteps: *maxSteps, SkillDir: *skillDir, MemoryInContext: *memoryInContext, MemoryContext: memoryContext})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)

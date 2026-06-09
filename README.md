@@ -206,6 +206,7 @@ go test ./...
 ├── internal/tools/echo.go         # 回显工具
 ├── internal/tools/weather.go      # mock 天气工具
 ├── internal/tools/memory.go       # 本地记忆工具
+├── internal/tools/file.go         # 项目内文件搜索和读取工具
 ├── memory/memory.json             # 默认记忆文件，运行时自动创建
 └── skills/                        # 示例 skill 文件
 ```
@@ -253,8 +254,16 @@ type Tool interface {
 - `weather` 负责返回 mock 天气。
 - `echo` 负责返回文本。
 - `memory` 负责读写本地持久化记忆。
+- `file_search` 负责在项目目录内按文件名/路径关键词搜索文件。
+- `read_file` 负责读取项目目录内指定文本文件。
 
-模型只决定“要调用什么工具、传什么参数”；真正执行动作的是工具。
+`file_search` 和 `read_file` 都限制在项目目录内，拒绝绝对路径和 `..` 逃逸路径。模型只决定“要调用什么工具、传什么参数”；真正执行动作的是工具，工具层负责安全边界。
+
+示例：
+
+```bash
+go run ./cmd/agent -provider deepseek "请搜索 README 文件并读取它，总结这个项目的能力"
+```
 
 ### 3. 记忆 Memory 如何持久化上下文
 
