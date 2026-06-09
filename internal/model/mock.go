@@ -17,7 +17,7 @@ func NewMockProvider() *MockProvider {
 }
 
 func (p *MockProvider) Next(ctx context.Context, req Request) (Decision, error) {
-	trace.Log(ctx, "model.MockProvider.Next.start", map[string]any{"messages": req.Messages, "tools": req.Tools, "skills": req.Skills})
+	trace.Log(ctx, "model.MockProvider.Next.start", map[string]any{"messages": req.Messages, "tools": req.Tools, "skills": req.Skills, "memory_context": req.MemoryContext})
 	if len(req.Messages) == 0 {
 		return Decision{}, fmt.Errorf("messages are required")
 	}

@@ -65,8 +65,8 @@ func (p *AnthropicProvider) Next(ctx context.Context, req Request) (Decision, er
 	}
 
 	adaptive := anthropic.ThinkingConfigAdaptiveParam{}
-	systemPrompt := withSkills(p.systemPrompt, req.Skills)
-	trace.Log(ctx, "model.AnthropicProvider.Next.request", map[string]any{"model": p.model, "messages": len(messages), "tools": len(anthropicTools), "skills": len(req.Skills), "system_prompt_len": len(systemPrompt)})
+	systemPrompt := withMemory(withSkills(p.systemPrompt, req.Skills), req.MemoryContext)
+	trace.Log(ctx, "model.AnthropicProvider.Next.request", map[string]any{"model": p.model, "messages": len(messages), "tools": len(anthropicTools), "skills": len(req.Skills), "memory_context_len": len(req.MemoryContext), "system_prompt_len": len(systemPrompt)})
 	resp, err := p.client.Messages.New(ctx, anthropic.MessageNewParams{
 		Model:     p.model,
 		MaxTokens: p.maxTokens,

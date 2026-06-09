@@ -32,6 +32,13 @@ func TestStoreSetGetListDelete(t *testing.T) {
 	if len(entries) != 1 {
 		t.Fatalf("len(entries) = %d", len(entries))
 	}
+	contextText, err := store.FormatContext(ctx)
+	if err != nil {
+		t.Fatalf("FormatContext returned error: %v", err)
+	}
+	if contextText != "- language = Go" {
+		t.Fatalf("FormatContext = %q", contextText)
+	}
 
 	deleted, err := store.Delete(ctx, "language")
 	if err != nil {

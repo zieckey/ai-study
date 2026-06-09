@@ -3,8 +3,10 @@ package agent
 import "encoding/json"
 
 type Config struct {
-	MaxSteps int
-	SkillDir string
+	MaxSteps        int
+	SkillDir        string
+	MemoryInContext bool
+	MemoryContext   string
 }
 
 type Result struct {

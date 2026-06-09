@@ -26,6 +26,7 @@ func main() {
 	traceLog := flag.Bool("trace-log", true, "是否打印函数级 trace log 到 stderr")
 	skillDir := flag.String("skill-dir", "skills", "本地 Markdown skills 目录")
 	memoryPath := flag.String("memory-path", "memory/memory.json", "本地持久化记忆文件路径")
+	memoryInContext := flag.Bool("memory-in-context", false, "是否把本地记忆内容自动注入模型上下文")
 	jsonOutput := flag.Bool("json", false, "以 JSON 格式输出 goal、trace 和 answer")
 	flag.Parse()
 
@@ -49,6 +50,7 @@ func main() {
 		"json_output":              *jsonOutput,
 		"skill_dir":                *skillDir,
 		"memory_path":              *memoryPath,
+		"memory_in_context":        *memoryInContext,
 		"goal":                     goal,
 		"anthropic_api_key_set":    os.Getenv("ANTHROPIC_API_KEY") != "",
 		"deepseek_api_key_set":     os.Getenv("DEEPSEEK_API_KEY") != "",
@@ -62,13 +64,21 @@ func main() {
 	}
 
 	memoryStore := memory.NewStore(*memoryPath)
+	memoryContext := ""
+	if *memoryInContext {
+		memoryContext, err = memoryStore.FormatContext(ctx)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+	}
 	a, err := agent.New(ctx, modelProvider, []tools.Tool{
 		tools.Calculator{},
 		tools.Clock{},
 		tools.Echo{},
 		tools.Weather{},
 		tools.Memory{Store: memoryStore},
-	}, agent.Config{MaxSteps: *maxSteps, SkillDir: *skillDir})
+	}, agent.Config{MaxSteps: *maxSteps, SkillDir: *skillDir, MemoryInContext: *memoryInContext, MemoryContext: memoryContext})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

@@ -72,6 +72,21 @@ func (s *Store) List(ctx context.Context) ([]Entry, error) {
 	return list, nil
 }
 
+func (s *Store) FormatContext(ctx context.Context) (string, error) {
+	entries, err := s.List(ctx)
+	if err != nil {
+		return "", err
+	}
+	if len(entries) == 0 {
+		return "", nil
+	}
+	lines := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		lines = append(lines, fmt.Sprintf("- %s = %s", entry.Key, entry.Value))
+	}
+	return strings.Join(lines, "\n"), nil
+}
+
 func (s *Store) Delete(ctx context.Context, key string) (bool, error) {
 	trace.Log(ctx, "memory.Store.Delete", map[string]any{"path": s.path, "key": key})
 	entries, err := s.load(ctx)

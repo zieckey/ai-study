@@ -80,8 +80,8 @@ func (p *DeepSeekProvider) Next(ctx context.Context, req Request) (Decision, err
 		return Decision{}, fmt.Errorf("DEEPSEEK_API_KEY is required for deepseek provider")
 	}
 
-	systemPrompt := withSkills(p.systemPrompt, req.Skills)
-	trace.Log(ctx, "model.DeepSeekProvider.Next.prepareSkill", map[string]any{"systemPrompt": systemPrompt})
+	systemPrompt := withMemory(withSkills(p.systemPrompt, req.Skills), req.MemoryContext)
+	trace.Log(ctx, "model.DeepSeekProvider.Next.prepareSkill", map[string]any{"systemPrompt": systemPrompt, "memory_context_len": req.MemoryContext})
 	messages, err := toDeepSeekMessages(ctx, req.Messages, systemPrompt)
 	if err != nil {
 		return Decision{}, err
@@ -99,7 +99,7 @@ func (p *DeepSeekProvider) Next(ctx context.Context, req Request) (Decision, err
 		MaxTokens:  p.maxTokens,
 	}
 
-	trace.Log(ctx, "model.DeepSeekProvider.Next.request", map[string]any{"model": body.Model, "messages": body.Messages, "tools": body.Tools, "skills": len(req.Skills), "tool_choice": body.ToolChoice, "max_tokens": body.MaxTokens})
+	trace.Log(ctx, "model.DeepSeekProvider.Next.request", map[string]any{"model": body.Model, "messages": body.Messages, "tools": body.Tools, "skills": len(req.Skills), "memory_context_len": len(req.MemoryContext), "tool_choice": body.ToolChoice, "max_tokens": body.MaxTokens})
 	payload, err := json.Marshal(body)
 	if err != nil {
 		return Decision{}, err

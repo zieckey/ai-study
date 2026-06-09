@@ -20,7 +20,7 @@ type Agent struct {
 }
 
 func New(ctx context.Context, provider model.Provider, registeredTools []tools.Tool, config Config) (*Agent, error) {
-	trace.Log(ctx, "agent.New", map[string]any{"tools": len(registeredTools), "max_steps": config.MaxSteps, "skill_dir": config.SkillDir})
+	trace.Log(ctx, "agent.New", map[string]any{"tools": len(registeredTools), "max_steps": config.MaxSteps, "skill_dir": config.SkillDir, "memory_in_context": config.MemoryInContext, "memory_context_len": len(config.MemoryContext)})
 	if provider == nil {
 		return nil, errors.New("model provider is required")
 	}
@@ -47,7 +47,7 @@ func New(ctx context.Context, provider model.Provider, registeredTools []tools.T
 }
 
 func (a *Agent) Run(ctx context.Context, goal string) (Result, error) {
-	trace.Log(ctx, "agent.Run.start", map[string]any{"goal": goal, "max_steps": a.config.MaxSteps, "tools": len(a.tools)})
+	trace.Log(ctx, "agent.Run.start", map[string]any{"goal": goal, "max_steps": a.config.MaxSteps, "tools": len(a.tools), "memory_in_context": a.config.MemoryInContext, "memory_context_len": len(a.config.MemoryContext)})
 	messages := []model.Message{{Role: model.RoleUser, Content: goal}}
 	selectedSkills := skills.Select(ctx, goal, a.skills)
 	result := Result{}
@@ -55,9 +55,10 @@ func (a *Agent) Run(ctx context.Context, goal string) (Result, error) {
 	for step := 1; step <= a.config.MaxSteps; step++ {
 		trace.Log(ctx, "\n\n\nagent.Run.step", map[string]any{"step": step, "messages": messages})
 		decision, err := a.provider.Next(ctx, model.Request{
-			Messages: messages,
-			Tools:    a.toolSpecs(ctx),
-			Skills:   skillSpecs(selectedSkills),
+			Messages:      messages,
+			Tools:         a.toolSpecs(ctx),
+			Skills:        skillSpecs(selectedSkills),
+			MemoryContext: a.memoryContext(),
 		})
 		if err != nil {
 			return Result{}, fmt.Errorf("model decision failed: %w", err)
@@ -100,6 +101,13 @@ func (a *Agent) Run(ctx context.Context, goal string) (Result, error) {
 	}
 
 	return Result{}, fmt.Errorf("agent stopped after %d steps without final answer", a.config.MaxSteps)
+}
+
+func (a *Agent) memoryContext() string {
+	if !a.config.MemoryInContext {
+		return ""
+	}
+	return a.config.MemoryContext
 }
 
 func skillSpecs(selected []skills.Skill) []model.SkillSpec {

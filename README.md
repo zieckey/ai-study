@@ -170,6 +170,17 @@ go run ./cmd/agent \
 - 如果你使用代理或兼容网关，可以用 `DEEPSEEK_BASE_URL` 覆盖默认地址。
 - DeepSeek 返回 `tool_calls` 后，Agent 仍然在本地执行工具，并把 `tool_call_id` 对应的 observation 继续发回模型。
 
+记忆默认只通过 `memory` 工具按需读取。如果希望每次请求都自动把本地记忆注入模型上下文，可以开启：
+
+```bash
+go run ./cmd/agent \
+  -memory-path memory/demo.json \
+  -memory-in-context \
+  "请根据我的偏好回答"
+```
+
+开启后，程序会在请求前读取记忆文件，把内容追加到 system prompt 的 `<memory>` 块中。记忆越多，消耗的 token 越多；不要把密码、API Key、token 等敏感信息写入记忆。
+
 运行测试：
 
 ```bash
@@ -303,6 +314,16 @@ go run ./cmd/agent -memory-path memory/demo.json "列出记忆"
   }
 }
 ```
+
+默认情况下，记忆不会自动进入模型上下文，模型只知道可以调用 `memory` 工具读取它。开启 `-memory-in-context` 后，程序会在每次请求前读取记忆文件，并把内容注入 system prompt：
+
+```text
+<memory>
+- language = Go
+</memory>
+```
+
+这种方式的优点是模型一开始就能看到已保存记忆；缺点是记忆越多，token 消耗越多，也可能暴露不相关上下文。
 
 注意：不要把密码、API Key、token 等敏感信息写入记忆。记忆文件是普通本地 JSON 文件，如果项目公开提交到 GitHub，应把 `memory/` 加入 `.gitignore`。
 

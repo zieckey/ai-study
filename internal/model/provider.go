@@ -34,9 +34,10 @@ type SkillSpec struct {
 }
 
 type Request struct {
-	Messages []Message   `json:"messages"`
-	Tools    []ToolSpec  `json:"tools"`
-	Skills   []SkillSpec `json:"skills,omitempty"`
+	Messages      []Message   `json:"messages"`
+	Tools         []ToolSpec  `json:"tools"`
+	Skills        []SkillSpec `json:"skills,omitempty"`
+	MemoryContext string      `json:"memory_context,omitempty"`
 }
 
 type DecisionType string
