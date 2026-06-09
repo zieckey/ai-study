@@ -970,7 +970,7 @@ Agent 执行 Go 函数
 
 并继续选择合适的工具。
 
-### 当前实现一次只执行一个 tool_call
+### 当前实现支持一次执行多个 tool_calls
 
 需要注意的是，DeepSeek 一次可能返回多个 `tool_calls`。例如它可能一次性返回：
 
@@ -997,21 +997,22 @@ Agent 执行 Go 函数
 ]
 ```
 
-这说明模型已经理解了全部任务。但当前 `DeepSeekProvider.Next()` 只取第一个 tool call：
+这说明模型已经理解了全部任务。当前 `DeepSeekProvider.Next()` 会把这些调用全部转成内部 `ToolCall` 列表：
 
 ```go
-toolCall := message.ToolCalls[0]
+calls = append(calls, ToolCall{
+    ToolUseID: toolCall.ID,
+    ToolName:  toolCall.Function.Name,
+    Arguments: json.RawMessage(toolCall.Function.Arguments),
+})
 ```
 
-所以程序实际一轮只执行一个工具。剩下的任务会在后续轮次中，由 DeepSeek 根据上下文重新规划并继续返回。
-
-因此如果你看到 4 次 DeepSeek 交互，通常是：
+Agent Loop 会在同一轮里依次执行这些工具，并把所有 observation 一起追加回上下文：
 
 ```text
-第 1 次：DeepSeek 返回一个或多个 tool_calls，程序执行第一个
-第 2 次：DeepSeek 看到第一个工具结果后，继续返回下一个工具调用
-第 3 次：继续执行剩余工具调用
-第 4 次：所有任务完成，DeepSeek 返回最终答案
+第 1 次：DeepSeek 返回多个 tool_calls
+同一轮：Agent 执行 calculator、weather、calculator
+第 2 次：DeepSeek 看到所有工具结果后，返回最终答案
 ```
 
 ### 是否总能精准
@@ -1021,7 +1022,7 @@ toolCall := message.ToolCalls[0]
 - 返回不存在的工具名
 - 参数格式不符合 schema
 - 选择了不合适的工具
-- 一次返回多个 `tool_calls`，但当前 Agent 只处理第一个
+- 一次返回多个 `tool_calls`，其中某个调用失败会导致本轮失败
 - 把 `arguments` 生成成非法 JSON 字符串
 
 所以 Agent 端必须校验。当前代码已经做了未知工具检查：

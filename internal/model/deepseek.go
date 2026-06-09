@@ -138,13 +138,18 @@ func (p *DeepSeekProvider) Next(ctx context.Context, req Request) (Decision, err
 
 	message := chatResp.Choices[0].Message
 	if len(message.ToolCalls) > 0 {
-		toolCall := message.ToolCalls[0]
-		trace.Log(ctx, "model.DeepSeekProvider.Next.tool_call", map[string]any{"tool_call_id": toolCall.ID, "tool_name": toolCall.Function.Name, "arguments": toolCall.Function.Arguments})
+		calls := make([]ToolCall, 0, len(message.ToolCalls))
+		for _, toolCall := range message.ToolCalls {
+			trace.Log(ctx, "model.DeepSeekProvider.Next.tool_call", map[string]any{"tool_call_id": toolCall.ID, "tool_name": toolCall.Function.Name, "arguments": toolCall.Function.Arguments})
+			calls = append(calls, ToolCall{
+				ToolUseID: toolCall.ID,
+				ToolName:  toolCall.Function.Name,
+				Arguments: json.RawMessage(toolCall.Function.Arguments),
+			})
+		}
 		return Decision{
 			Type:      DecisionToolCall,
-			ToolUseID: toolCall.ID,
-			ToolName:  toolCall.Function.Name,
-			Arguments: json.RawMessage(toolCall.Function.Arguments),
+			ToolCalls: calls,
 			Answer:    message.Content,
 		}, nil
 	}
@@ -160,35 +165,42 @@ func (p *DeepSeekProvider) Next(ctx context.Context, req Request) (Decision, err
 func toDeepSeekMessages(ctx context.Context, messages []Message, systemPrompt string) ([]deepSeekMessage, error) {
 	trace.Log(ctx, "model.toDeepSeekMessages", map[string]any{"messages": messages, "system_prompt_len": len(systemPrompt)})
 	result := []deepSeekMessage{{Role: "system", Content: systemPrompt}}
-	for _, message := range messages {
+	for i := 0; i < len(messages); i++ {
+		message := messages[i]
 		switch message.Role {
 		case RoleUser:
 			result = append(result, deepSeekMessage{Role: "user", Content: message.Content})
 		case RoleAssistant:
 			if message.ToolName != "" {
-				if message.ToolUseID == "" {
-					return nil, fmt.Errorf("assistant tool call for %q is missing tool_use_id", message.ToolName)
-				}
-				result = append(result, deepSeekMessage{
-					Role:    "assistant",
-					Content: message.Content,
-					ToolCalls: []deepSeekToolCall{{
-						ID:   message.ToolUseID,
+				assistant := deepSeekMessage{Role: "assistant", Content: message.Content}
+				for i < len(messages) && messages[i].Role == RoleAssistant && messages[i].ToolName != "" {
+					if messages[i].ToolUseID == "" {
+						return nil, fmt.Errorf("assistant tool call for %q is missing tool_use_id", messages[i].ToolName)
+					}
+					assistant.ToolCalls = append(assistant.ToolCalls, deepSeekToolCall{
+						ID:   messages[i].ToolUseID,
 						Type: "function",
 						Function: deepSeekToolCallFunction{
-							Name:      message.ToolName,
-							Arguments: message.ToolInput,
+							Name:      messages[i].ToolName,
+							Arguments: messages[i].ToolInput,
 						},
-					}},
-				})
+					})
+					i++
+				}
+				i--
+				result = append(result, assistant)
 				continue
 			}
 			result = append(result, deepSeekMessage{Role: "assistant", Content: message.Content})
 		case RoleTool:
-			if message.ToolUseID == "" {
-				return nil, fmt.Errorf("tool result for %q is missing tool_use_id", message.ToolName)
+			for i < len(messages) && messages[i].Role == RoleTool {
+				if messages[i].ToolUseID == "" {
+					return nil, fmt.Errorf("tool result for %q is missing tool_use_id", messages[i].ToolName)
+				}
+				result = append(result, deepSeekMessage{Role: "tool", Content: messages[i].Content, ToolCallID: messages[i].ToolUseID})
+				i++
 			}
-			result = append(result, deepSeekMessage{Role: "tool", Content: message.Content, ToolCallID: message.ToolUseID})
+			i--
 		default:
 			return nil, fmt.Errorf("unsupported message role %q", message.Role)
 		}

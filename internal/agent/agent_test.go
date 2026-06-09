@@ -56,6 +56,33 @@ func TestAgentRunMaxSteps(t *testing.T) {
 	}
 }
 
+func TestAgentRunMultipleToolCalls(t *testing.T) {
+	a, err := New(context.Background(), &sequenceProvider{decisions: []model.Decision{
+		{
+			Type: model.DecisionToolCall,
+			ToolCalls: []model.ToolCall{
+				{ToolName: "echo", Arguments: json.RawMessage(`{"text":"one"}`)},
+				{ToolName: "echo", Arguments: json.RawMessage(`{"text":"two"}`)},
+			},
+		},
+		{Type: model.DecisionFinal, Answer: "done"},
+	}}, []tools.Tool{tools.Echo{}}, Config{MaxSteps: 2})
+	if err != nil {
+		t.Fatalf("New returned error: %v", err)
+	}
+
+	result, err := a.Run(context.Background(), "test")
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if result.Answer != "done" {
+		t.Fatalf("Answer = %q", result.Answer)
+	}
+	if len(result.Trace) != 3 {
+		t.Fatalf("Trace length = %d", len(result.Trace))
+	}
+}
+
 func TestAgentRunToolFailure(t *testing.T) {
 	a, err := New(context.Background(), staticProvider{decision: model.Decision{Type: model.DecisionToolCall, ToolName: "fail", Arguments: json.RawMessage(`{}`)}}, []tools.Tool{failingTool{}}, Config{MaxSteps: 1})
 	if err != nil {
@@ -73,6 +100,20 @@ type staticProvider struct {
 
 func (p staticProvider) Next(context.Context, model.Request) (model.Decision, error) {
 	return p.decision, nil
+}
+
+type sequenceProvider struct {
+	decisions []model.Decision
+	index     int
+}
+
+func (p *sequenceProvider) Next(context.Context, model.Request) (model.Decision, error) {
+	if p.index >= len(p.decisions) {
+		return model.Decision{}, errors.New("no more decisions")
+	}
+	decision := p.decisions[p.index]
+	p.index++
+	return decision, nil
 }
 
 type failingTool struct{}

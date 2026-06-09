@@ -17,6 +17,7 @@ type Result struct {
 type TraceEvent struct {
 	Step        int             `json:"step"`
 	Decision    string          `json:"decision"`
+	ToolUseID   string          `json:"tool_use_id,omitempty"`
 	ToolName    string          `json:"tool_name,omitempty"`
 	ToolInput   json.RawMessage `json:"tool_input,omitempty"`
 	Observation string          `json:"observation,omitempty"`

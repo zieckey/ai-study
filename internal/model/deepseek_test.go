@@ -52,6 +52,31 @@ func TestToDeepSeekMessagesRequiresToolUseID(t *testing.T) {
 	}
 }
 
+func TestToDeepSeekMessagesWithMultipleToolResults(t *testing.T) {
+	messages, err := toDeepSeekMessages(context.Background(), []Message{
+		{Role: RoleUser, Content: "run tools"},
+		{Role: RoleAssistant, ToolUseID: "call_1", ToolName: "calculator", ToolInput: `{"expression":"1 + 2"}`},
+		{Role: RoleAssistant, ToolUseID: "call_2", ToolName: "weather", ToolInput: `{"city":"北京"}`},
+		{Role: RoleTool, ToolUseID: "call_1", ToolName: "calculator", Content: "3"},
+		{Role: RoleTool, ToolUseID: "call_2", ToolName: "weather", Content: "北京：晴，25°C"},
+	}, "system prompt")
+	if err != nil {
+		t.Fatalf("toDeepSeekMessages returned error: %v", err)
+	}
+	if len(messages) != 5 {
+		t.Fatalf("len(messages) = %d", len(messages))
+	}
+	if len(messages[2].ToolCalls) != 2 {
+		t.Fatalf("assistant tool calls = %d", len(messages[2].ToolCalls))
+	}
+	if messages[3].ToolCallID != "call_1" {
+		t.Fatalf("first tool result id = %q", messages[3].ToolCallID)
+	}
+	if messages[4].ToolCallID != "call_2" {
+		t.Fatalf("second tool result id = %q", messages[4].ToolCallID)
+	}
+}
+
 func TestDeepSeekProviderNextToolCall(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/chat/completions" {
@@ -89,10 +114,17 @@ func TestDeepSeekProviderNextToolCall(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Next returned error: %v", err)
 	}
-	if decision.Type != DecisionToolCall || decision.ToolUseID != "call_1" || decision.ToolName != "weather" {
+	if decision.Type != DecisionToolCall {
 		t.Fatalf("decision = %+v", decision)
 	}
-	if string(decision.Arguments) != `{"city":"北京"}` {
-		t.Fatalf("arguments = %s", string(decision.Arguments))
+	calls := decision.Calls()
+	if len(calls) != 1 {
+		t.Fatalf("len(calls) = %d", len(calls))
+	}
+	if calls[0].ToolUseID != "call_1" || calls[0].ToolName != "weather" {
+		t.Fatalf("call = %+v", calls[0])
+	}
+	if string(calls[0].Arguments) != `{"city":"北京"}` {
+		t.Fatalf("arguments = %s", string(calls[0].Arguments))
 	}
 }

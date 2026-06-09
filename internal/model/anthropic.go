@@ -91,21 +91,20 @@ func (p *AnthropicProvider) Next(ctx context.Context, req Request) (Decision, er
 	trace.Log(ctx, "model.AnthropicProvider.Next.response", map[string]any{"content_blocks": len(resp.Content), "stop_reason": resp.StopReason})
 
 	var textParts []string
+	var calls []ToolCall
 	for _, block := range resp.Content {
 		switch variant := block.AsAny().(type) {
 		case anthropic.ToolUseBlock:
 			trace.Log(ctx, "model.AnthropicProvider.Next.tool_use", map[string]any{"tool_use_id": variant.ID, "tool_name": variant.Name, "input": variant.Input})
-			return Decision{
-				Type:      DecisionToolCall,
-				ToolUseID: variant.ID,
-				ToolName:  variant.Name,
-				Arguments: variant.Input,
-			}, nil
+			calls = append(calls, ToolCall{ToolUseID: variant.ID, ToolName: variant.Name, Arguments: variant.Input})
 		case anthropic.TextBlock:
 			if strings.TrimSpace(variant.Text) != "" {
 				textParts = append(textParts, variant.Text)
 			}
 		}
+	}
+	if len(calls) > 0 {
+		return Decision{Type: DecisionToolCall, ToolCalls: calls, Answer: strings.TrimSpace(strings.Join(textParts, "\n"))}, nil
 	}
 
 	answer := strings.TrimSpace(strings.Join(textParts, "\n"))
@@ -119,32 +118,56 @@ func (p *AnthropicProvider) Next(ctx context.Context, req Request) (Decision, er
 func toAnthropicMessages(ctx context.Context, messages []Message) ([]anthropic.MessageParam, error) {
 	trace.Log(ctx, "model.toAnthropicMessages", map[string]any{"messages": len(messages)})
 	result := make([]anthropic.MessageParam, 0, len(messages))
-	for _, message := range messages {
+	for i := 0; i < len(messages); i++ {
+		message := messages[i]
 		switch message.Role {
 		case RoleUser:
 			result = append(result, anthropic.NewUserMessage(anthropic.NewTextBlock(message.Content)))
 		case RoleAssistant:
 			if message.ToolName != "" {
-				var input any = map[string]any{}
-				if strings.TrimSpace(message.ToolInput) != "" {
-					if err := json.Unmarshal([]byte(message.ToolInput), &input); err != nil {
-						return nil, fmt.Errorf("invalid assistant tool input: %w", err)
-					}
+				blocks := []anthropic.ContentBlockParamUnion{}
+				if strings.TrimSpace(message.Content) != "" {
+					blocks = append(blocks, anthropic.NewTextBlock(message.Content))
 				}
-				result = append(result, anthropic.NewAssistantMessage(anthropic.NewToolUseBlock(message.ToolUseID, input, message.ToolName)))
+				for i < len(messages) && messages[i].Role == RoleAssistant && messages[i].ToolName != "" {
+					block, err := anthropicToolUseBlock(messages[i])
+					if err != nil {
+						return nil, err
+					}
+					blocks = append(blocks, block)
+					i++
+				}
+				i--
+				result = append(result, anthropic.NewAssistantMessage(blocks...))
 				continue
 			}
 			result = append(result, anthropic.NewAssistantMessage(anthropic.NewTextBlock(message.Content)))
 		case RoleTool:
-			if message.ToolUseID == "" {
-				return nil, fmt.Errorf("tool result for %q is missing tool_use_id", message.ToolName)
+			blocks := []anthropic.ContentBlockParamUnion{}
+			for i < len(messages) && messages[i].Role == RoleTool {
+				if messages[i].ToolUseID == "" {
+					return nil, fmt.Errorf("tool result for %q is missing tool_use_id", messages[i].ToolName)
+				}
+				blocks = append(blocks, anthropic.NewToolResultBlock(messages[i].ToolUseID, messages[i].Content, false))
+				i++
 			}
-			result = append(result, anthropic.NewUserMessage(anthropic.NewToolResultBlock(message.ToolUseID, message.Content, false)))
+			i--
+			result = append(result, anthropic.NewUserMessage(blocks...))
 		default:
 			return nil, fmt.Errorf("unsupported message role %q", message.Role)
 		}
 	}
 	return result, nil
+}
+
+func anthropicToolUseBlock(message Message) (anthropic.ContentBlockParamUnion, error) {
+	var input any = map[string]any{}
+	if strings.TrimSpace(message.ToolInput) != "" {
+		if err := json.Unmarshal([]byte(message.ToolInput), &input); err != nil {
+			return anthropic.ContentBlockParamUnion{}, fmt.Errorf("invalid assistant tool input: %w", err)
+		}
+	}
+	return anthropic.NewToolUseBlock(message.ToolUseID, input, message.ToolName), nil
 }
 
 func toAnthropicTools(ctx context.Context, toolSpecs []ToolSpec) ([]anthropic.ToolUnionParam, error) {

@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -71,30 +70,40 @@ func (a *Agent) Run(ctx context.Context, goal string) (Result, error) {
 			result.Trace = append(result.Trace, TraceEvent{Step: step, Decision: "final"})
 			return result, nil
 		case model.DecisionToolCall:
-			trace.Log(ctx, "agent.Run.decision.tool_call", map[string]any{"step": step, "tool_use_id": decision.ToolUseID, "tool_name": decision.ToolName, "arguments": json.RawMessage(decision.Arguments)})
-			tool, ok := a.tools[decision.ToolName]
-			if !ok {
-				return Result{}, fmt.Errorf("unknown tool %q", decision.ToolName)
+			calls := decision.Calls()
+			trace.Log(ctx, "agent.Run.decision.tool_call", map[string]any{"step": step, "tool_calls": calls})
+			if len(calls) == 0 {
+				return Result{}, fmt.Errorf("tool_call decision did not include any tool calls")
 			}
 
-			observation, err := tool.Execute(ctx, decision.Arguments)
-			if err != nil {
-				trace.Log(ctx, "agent.Run.tool.error", map[string]any{"step": step, "tool_name": decision.ToolName, "error": err.Error()})
-				return Result{}, fmt.Errorf("tool %q failed: %w", decision.ToolName, err)
-			}
-			trace.Log(ctx, "agent.Run.tool.success", map[string]any{"step": step, "tool_name": decision.ToolName, "observation": observation})
+			assistantMessages := make([]model.Message, 0, len(calls))
+			toolMessages := make([]model.Message, 0, len(calls))
+			for _, call := range calls {
+				tool, ok := a.tools[call.ToolName]
+				if !ok {
+					return Result{}, fmt.Errorf("unknown tool %q", call.ToolName)
+				}
 
-			result.Trace = append(result.Trace, TraceEvent{
-				Step:        step,
-				Decision:    "tool_call",
-				ToolName:    decision.ToolName,
-				ToolInput:   decision.Arguments,
-				Observation: observation,
-			})
-			messages = append(messages,
-				model.Message{Role: model.RoleAssistant, Content: decision.Answer, ToolUseID: decision.ToolUseID, ToolName: decision.ToolName, ToolInput: string(decision.Arguments)},
-				model.Message{Role: model.RoleTool, Content: observation, ToolUseID: decision.ToolUseID, ToolName: decision.ToolName},
-			)
+				observation, err := tool.Execute(ctx, call.Arguments)
+				if err != nil {
+					trace.Log(ctx, "agent.Run.tool.error", map[string]any{"step": step, "tool_use_id": call.ToolUseID, "tool_name": call.ToolName, "error": err.Error()})
+					return Result{}, fmt.Errorf("tool %q failed: %w", call.ToolName, err)
+				}
+				trace.Log(ctx, "agent.Run.tool.success", map[string]any{"step": step, "tool_use_id": call.ToolUseID, "tool_name": call.ToolName, "observation": observation})
+
+				result.Trace = append(result.Trace, TraceEvent{
+					Step:        step,
+					Decision:    "tool_call",
+					ToolUseID:   call.ToolUseID,
+					ToolName:    call.ToolName,
+					ToolInput:   call.Arguments,
+					Observation: observation,
+				})
+				assistantMessages = append(assistantMessages, model.Message{Role: model.RoleAssistant, Content: decision.Answer, ToolUseID: call.ToolUseID, ToolName: call.ToolName, ToolInput: string(call.Arguments)})
+				toolMessages = append(toolMessages, model.Message{Role: model.RoleTool, Content: observation, ToolUseID: call.ToolUseID, ToolName: call.ToolName})
+			}
+			messages = append(messages, assistantMessages...)
+			messages = append(messages, toolMessages...)
 		default:
 			return Result{}, fmt.Errorf("unknown decision type %q", decision.Type)
 		}
