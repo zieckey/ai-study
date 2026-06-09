@@ -702,3 +702,743 @@
   本地 Markdown skills + 关键词 selector + provider system prompt 注入
                                                                                                                                                                                                                                              
   不需要引入复杂依赖。    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# harness 是什么？请详细讲解一下它的原理和用法。如果我想在该学习项目中引入harness，请详细讲解一下如何做
+
+在 AI Agent 里，harness 可以理解为“Agent 的宿主运行时 / 执行外壳 / 控制框架”。
+
+模型本身只会生成文本或结构化意图，例如：
+
+{
+  "tool_calls": [
+    {
+      "function": {
+        "name": "read_file",
+        "arguments": "{\"path\":\"README.md\"}"
+      }
+    }
+  ]
+}
+
+但模型不会真的读取文件。
+真正负责：
+
+接收模型意图
+校验参数
+执行工具
+记录日志
+处理权限
+管理上下文
+把 observation 发回模型
+控制循环终止
+
+的那层程序，就可以叫 harness。
+
+你现在这个 Go 项目，其实已经有一个最小 harness 了。
+
+---
+1. Harness 在 Agent 架构里的位置
+
+可以把 Agent 系统拆成四层：
+
+User
+  ↓
+Harness / Agent Runtime
+  ↓
+LLM Provider
+  ↓
+Model
+
+更具体一点：
+
+用户输入
+  ↓
+Harness 维护 messages / skills / memory / tools
+  ↓
+Provider 把请求发给 DeepSeek / Claude
+  ↓
+模型返回 final answer 或 tool_calls
+  ↓
+Harness 校验 tool_calls
+  ↓
+Harness 执行本地工具
+  ↓
+Harness 把 observation 写回 messages
+  ↓
+下一轮模型调用
+
+所以 harness 不是模型，也不是工具本身，而是：
+
+▎ 让模型、工具、上下文、权限、日志、记忆、终止条件协同工作的运行时。
+
+---
+2. 为什么需要 Harness
+
+如果没有 harness，模型只能回答文本：
+
+你应该读取 README.md。
+
+但有了 harness，模型可以提出结构化动作：
+
+{
+  "name": "read_file",
+  "arguments": "{\"path\":\"README.md\"}"
+}
+
+然后 harness 做这些事：
+
+1. 检查 read_file 是否存在
+2. 检查路径是否安全
+3. 执行 Go 函数
+4. 得到文件内容
+5. 把结果作为 observation 发回模型
+6. 让模型继续推理或总结
+
+也就是：
+
+模型负责“想做什么”
+Harness 负责“能不能做、怎么做、做完怎么继续”
+工具负责“实际动作”
+
+---
+3. Harness 和 Tool 的区别
+
+┌──────────┬───────────────────────┐
+│   概念   │         作用          │
+├──────────┼───────────────────────┤
+│ Model    │ 生成回答或 tool_calls │
+├──────────┼───────────────────────┤
+│ Tool     │ 执行某个具体动作      │
+├──────────┼───────────────────────┤
+│ Provider │ 连接具体模型 API      │
+├──────────┼───────────────────────┤
+│ Harness  │ 控制整个运行流程      │
+├──────────┼───────────────────────┤
+│ Skill    │ 给模型看的专项说明    │
+├──────────┼───────────────────────┤
+│ Memory   │ 持久化跨会话信息      │
+└──────────┴───────────────────────┘
+
+举例：
+
+用户：读取 README 并总结
+
+模型返回：
+
+tool_call read_file {"path":"README.md"}
+
+此时：
+
+- read_file 工具负责真正读文件
+- harness 负责决定是否允许读、调用哪个工具、把结果放回上下文、继续下一轮
+- provider 负责 DeepSeek / Claude API 请求格式转换
+- model 负责下一步是否继续搜索或最终回答
+
+---
+4. 你当前项目里的 Harness 是什么
+
+你现在的核心 harness 主要在：
+
+internal/agent/agent.go
+
+尤其是：
+
+func (a *Agent) Run(ctx context.Context, goal string) (Result, error)
+
+它已经做了 harness 的核心工作：
+
+messages := []model.Message{{Role: model.RoleUser, Content: goal}}
+
+for step := 1; step <= a.config.MaxSteps; step++ {
+    decision, err := a.provider.Next(ctx, model.Request{
+        Messages:      messages,
+        Tools:         a.toolSpecs(ctx),
+        Skills:        skillSpecs(selectedSkills),
+        MemoryContext: a.memoryContext(),
+    })
+
+    switch decision.Type {
+    case model.DecisionFinal:
+        return result, nil
+
+    case model.DecisionToolCall:
+        calls := decision.Calls()
+        for _, call := range calls {
+            tool := a.tools[call.ToolName]
+            observation := tool.Execute(ctx, call.Arguments)
+            messages append assistant tool_call
+            messages append tool observation
+        }
+    }
+}
+
+这就是一个最小 harness：
+
+维护 messages
+控制 max steps
+调用 provider
+执行工具
+处理多个 tool_calls
+记录 trace
+返回 final answer
+
+---
+5. 当前 harness 已经具备哪些能力
+
+你的项目已经有很多 harness 能力：
+
+5.1 Tool registry
+
+tools.Registry(ctx, registeredTools...)
+
+作用：
+
+把工具名 -> 工具实例 存起来
+
+例如：
+
+calculator -> tools.Calculator{}
+weather    -> tools.Weather{}
+read_file  -> tools.ReadFile{}
+
+当模型返回：
+
+"name": "read_file"
+
+harness 就能找到对应工具。
+
+---
+5.2 Agent Loop
+
+for step := 1; step <= MaxSteps; step++
+
+作用：
+
+防止模型无限调用工具
+
+没有这个限制，模型可能一直调用工具，不给最终答案。
+
+---
+5.3 Provider abstraction
+
+type Provider interface {
+    Next(ctx context.Context, req Request) (Decision, error)
+}
+
+作用：
+
+Agent 不关心底层是 mock、DeepSeek 还是 Claude
+
+Harness 只接收统一的：
+
+DecisionFinal
+DecisionToolCall
+
+---
+5.4 多工具调用
+
+你已经补齐了：
+
+calls := decision.Calls()
+for _, call := range calls {
+    ...
+}
+
+所以当 DeepSeek 一次返回多个 tool_calls，harness 能一次执行多个工具。
+
+---
+5.5 Trace log
+
+trace.Log(ctx, ...)
+
+这是 harness 的可观测性能力。
+
+它能告诉你：
+
+模型请求发了什么
+模型返回了什么
+Agent 执行了哪个工具
+工具参数是什么
+observation 是什么
+代码位置在哪里
+
+---
+5.6 Skill 注入
+
+selectedSkills := skills.Select(ctx, goal, a.skills)
+
+Harness 根据用户目标选择 skill，然后把它放进模型上下文。
+
+---
+5.7 Memory 注入 / memory 工具
+
+MemoryContext
+tools.Memory
+
+Harness 可以：
+
+- 让模型按需调用 memory 工具
+- 或者通过 -memory-in-context 自动把记忆注入 system prompt
+
+---
+5.8 工具安全边界
+
+例如 read_file 和 file_search：
+
+只允许项目目录内路径
+拒绝绝对路径
+拒绝 ..
+跳过 .git / .claude / .cjadk
+
+这就是 harness + tool 共同实现的安全控制。
+
+---
+6. 一个完整 Harness 执行流程
+
+以：
+
+go run ./cmd/agent -provider deepseek "请搜索 README 并总结项目能力"
+
+为例：
+
+1. CLI 解析参数
+   provider=deepseek
+   goal=请搜索 README 并总结项目能力
+
+2. Harness 初始化
+   加载 tools
+   加载 skills
+   加载 memory 配置
+   建立 trace logger
+
+3. Harness 构造 messages
+   user: 请搜索 README 并总结项目能力
+
+4. Harness 调用 provider.Next()
+   provider 把 messages/tools/skills 转成 DeepSeek 请求
+
+5. DeepSeek 返回 tool_calls
+   file_search {"query":"README"}
+
+6. Harness 校验工具
+   工具是否存在？
+   参数是否合法？
+
+7. Harness 执行 file_search
+   observation: README.md
+
+8. Harness 把 observation 加回 messages
+
+9. 下一轮 provider.Next()
+   DeepSeek 看到 README.md，可能返回：
+   read_file {"path":"README.md"}
+
+10. Harness 执行 read_file
+
+11. Harness 把 README 内容作为 observation 加回 messages
+
+12. 下一轮 provider.Next()
+   DeepSeek 输出最终总结
+
+13. Harness 返回 Result
+
+这就是一个完整 Agent harness 的职责。
+
+---
+7. 如果要在该学习项目中“正式引入 harness”，应该怎么做
+
+你现在虽然已经有 harness，但它还散在 agent.go、CLI、tools、trace 里。
+如果想把概念更清楚地引入项目，可以做一次结构化重构。
+
+目标是让项目结构变成：
+
+internal/harness/
+├── harness.go
+├── config.go
+├── result.go
+├── registry.go
+├── policy.go
+└── events.go
+
+然后让：
+
+internal/agent
+
+变得更薄，甚至可以改名为：
+
+internal/harness
+
+---
+8. 推荐的 Harness 目录设计
+
+8.1 internal/harness/config.go
+
+定义运行时配置：
+
+type Config struct {
+    MaxSteps        int
+    SkillDir        string
+    MemoryPath      string
+    MemoryInContext bool
+    TraceLog        bool
+}
+
+现在这些配置分散在：
+
+cmd/agent/main.go
+internal/agent/types.go
+
+可以统一放到 harness config。
+
+---
+8.2 internal/harness/harness.go
+
+核心运行时：
+
+type Harness struct {
+    provider Provider
+    tools    map[string]tools.Tool
+    skills   []skills.Skill
+    memory   *memory.Store
+    policy   Policy
+    config   Config
+}
+
+func (h *Harness) Run(ctx context.Context, goal string) (Result, error)
+
+这就是你现在 Agent.Run() 的升级版。
+
+---
+8.3 internal/harness/events.go
+
+现在 trace 是直接打日志。
+更进一步，可以定义结构化事件：
+
+type Event struct {
+    Step      int
+    Type      string
+    ToolName  string
+    Input     json.RawMessage
+    Output    string
+    Error     string
+}
+
+例如：
+
+model_request
+model_response
+tool_call
+tool_result
+final_answer
+
+这样以后可以：
+
+- 打印 CLI trace
+- 输出 JSON trace
+- 存日志文件
+- 做 Web UI
+- 做测试断言
+
+---
+8.4 internal/harness/policy.go
+
+这个很重要。
+
+当前工具只要模型返回，harness 就执行。
+
+未来如果加入：
+
+write_file
+delete_file
+shell
+http_request
+send_email
+
+就必须有 policy。
+
+例如：
+
+type Policy interface {
+    AllowTool(ctx context.Context, call model.ToolCall) (Decision, error)
+}
+
+可以先做：
+
+type AllowAllPolicy struct{}
+
+后面扩展：
+
+type ConfirmPolicy struct{}
+type DenyDangerousPolicy struct{}
+
+例如：
+
+read_file    allow
+file_search  allow
+calculator   allow
+weather      allow
+write_file   ask
+delete_file  deny
+shell         ask
+
+这就是真正 harness 和普通脚本的区别。
+
+---
+8.5 internal/harness/registry.go
+
+可以把工具注册做得更明确：
+
+type Registry struct {
+    tools map[string]tools.Tool
+}
+
+func (r *Registry) Get(name string) (tools.Tool, bool)
+func (r *Registry) Specs() []model.ToolSpec
+
+现在这部分在：
+
+tools.Registry()
+agent.toolSpecs()
+
+可以集中管理。
+
+---
+9. 具体重构路线
+
+我建议分 5 步做，不要一次大改。
+
+---
+第一步：保留现有 internal/agent，只引入 harness 概念文档
+
+先在 README 加一节：
+
+## Harness 是什么
+
+说明当前 internal/agent/agent.go 就是最小 harness。
+
+这一步不改代码。
+
+---
+第二步：把 agent.Config 扩展成 harness.Config
+
+新增：
+
+internal/harness/config.go
+
+先只移动配置类型，不动运行逻辑。
+
+type Config struct {
+    MaxSteps        int
+    SkillDir        string
+    MemoryInContext bool
+    MemoryContext   string
+}
+
+然后 agent.Config 可以暂时 alias：
+
+type Config = harness.Config
+
+这样改动小。
+
+---
+第三步：抽出 Tool Registry
+
+新增：
+
+internal/harness/registry.go
+
+把：
+
+a.toolSpecs(ctx)
+
+和：
+
+tools.Registry()
+
+逐步迁移进去。
+
+目标：
+
+registry := harness.NewToolRegistry(tools...)
+registry.Specs()
+registry.Get(name)
+
+---
+第四步：抽出 Policy
+
+新增：
+
+internal/harness/policy.go
+
+第一版：
+
+type Policy interface {
+    AllowTool(ctx context.Context, call model.ToolCall) error
+}
+
+type AllowAllPolicy struct{}
+
+func (AllowAllPolicy) AllowTool(ctx context.Context, call model.ToolCall) error {
+    return nil
+}
+
+在执行工具前加：
+
+if err := h.policy.AllowTool(ctx, call); err != nil {
+    return Result{}, err
+}
+
+这一步很有学习价值，因为它体现了：
+
+模型提出动作，不代表程序必须执行
+
+---
+第五步：把 Agent 改名或包裹成 Harness
+
+两种方案：
+
+方案 A：保守
+
+保留：
+
+internal/agent
+
+但 README 里说明：
+
+本项目里的 Agent 类型同时承担 harness/runtime 职责。
+
+优点：改动小。
+
+方案 B：更清晰
+
+新增：
+
+internal/harness
+
+把 Agent 迁移为：
+
+type Harness struct {}
+
+CLI 从：
+
+agent.New(...)
+
+改成：
+
+harness.New(...)
+
+优点：概念清楚。
+缺点：改动较多。
+
+我建议你先选 方案 A，因为这个项目还是学习项目，不必过早做大重构。
+
+---
+10. 如果现在就想“引入 harness”，最小实现是什么
+
+最小有价值版本是加一个 policy 层。
+
+因为这能马上体现 harness 的核心职责之一：
+
+工具调用前的安全控制
+
+可以新增：
+
+internal/harness/policy.go
+
+内容：
+
+package harness
+
+import (
+    "context"
+    "fmt"
+
+    "github.com/zieckey/ai-study/internal/model"
+)
+
+type Policy interface {
+    AllowTool(ctx context.Context, call model.ToolCall) error
+}
+
+type AllowAllPolicy struct{}
+
+func (AllowAllPolicy) AllowTool(ctx context.Context, call model.ToolCall) error {
+    return nil
+}
+
+type StaticPolicy struct {
+    Denied map[string]bool
+}
+
+func (p StaticPolicy) AllowTool(ctx context.Context, call model.ToolCall) error {
+    if p.Denied[call.ToolName] {
+        return fmt.Errorf("tool %q is denied by harness policy", call.ToolName)
+    }
+    return nil
+}
+
+然后在 Agent 里加：
+
+policy harness.Policy
+
+执行工具前：
+
+if err := a.policy.AllowTool(ctx, call); err != nil {
+    return Result{}, err
+}
+
+这样你的 Agent 就多了一个非常重要的 harness 能力：
+
+不是模型想调什么就调什么
+而是 harness 先检查是否允许
+
+---
+11. Harness 的最终学习路线
+
+如果你想继续沿着 harness 学，推荐顺序是：
+
+1. Policy：工具调用前的 allow/deny
+2. Event：统一记录 model_request/tool_call/tool_result
+3. Approval：危险工具人工确认
+4. Sandbox：限制文件路径、网络、命令执行范围
+5. Replay：用日志重放一次 Agent 执行过程
+6. Eval：用固定任务测试 Agent 是否按预期调用工具
+
+其中最适合你当前项目的下一步是：
+
+增加 harness policy 层
+
+因为你已经有：
+
+read_file
+file_search
+memory
+
+接下来再加 write_file 或 shell 时，就必须有 policy 了。
