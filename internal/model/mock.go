@@ -42,6 +42,9 @@ func (p *MockProvider) Next(ctx context.Context, req Request) (Decision, error) 
 	if text := textToRepeat(ctx, goal); text != "" {
 		return toolCall(ctx, "echo", map[string]string{"text": text})
 	}
+	if args := memoryRequest(ctx, goal); args != nil {
+		return toolCall(ctx, "memory", args)
+	}
 	if len(req.Skills) > 0 {
 		return Decision{Type: DecisionFinal, Answer: mockSkillAnswer(req.Skills)}, nil
 	}
@@ -121,6 +124,50 @@ func cityFromWeatherRequest(ctx context.Context, goal string) string {
 		}
 	}
 	return "北京"
+}
+
+func memoryRequest(ctx context.Context, goal string) map[string]string {
+	trace.Log(ctx, "model.memoryRequest", map[string]any{"goal": goal})
+	lower := strings.ToLower(goal)
+	if strings.Contains(goal, "列出记忆") || strings.Contains(goal, "所有记忆") || strings.Contains(lower, "list memory") {
+		return map[string]string{"action": "list"}
+	}
+	if strings.Contains(goal, "记住") || strings.Contains(goal, "保存记忆") || strings.Contains(lower, "remember") {
+		text := strings.TrimSpace(goal)
+		for _, marker := range []string{"请记住", "记住", "保存记忆", "remember"} {
+			if idx := strings.Index(strings.ToLower(text), strings.ToLower(marker)); idx >= 0 {
+				text = strings.TrimSpace(text[idx+len(marker):])
+				break
+			}
+		}
+		key, value := splitMemoryText(text)
+		return map[string]string{"action": "set", "key": key, "value": value}
+	}
+	if strings.Contains(goal, "回忆") || strings.Contains(goal, "读取记忆") || strings.Contains(lower, "recall") {
+		key := strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(goal, "回忆"), "读取记忆"))
+		if key == "" {
+			return map[string]string{"action": "list"}
+		}
+		return map[string]string{"action": "get", "key": key}
+	}
+	if strings.Contains(goal, "删除记忆") || strings.Contains(lower, "delete memory") {
+		key := strings.TrimSpace(strings.TrimPrefix(goal, "删除记忆"))
+		return map[string]string{"action": "delete", "key": key}
+	}
+	return nil
+}
+
+func splitMemoryText(text string) (string, string) {
+	text = strings.Trim(strings.TrimSpace(text), "：: ，,")
+	for _, sep := range []string{"=", "：", ":", "是"} {
+		if left, right, ok := strings.Cut(text, sep); ok {
+			return strings.TrimSpace(left), strings.TrimSpace(right)
+		}
+	}
+	if text == "" {
+		return "note", ""
+	}
+	return text, text
 }
 
 func asksForTime(ctx context.Context, goal string) bool {

@@ -187,12 +187,15 @@ go test ./...
 ├── internal/model/mock.go         # 规则驱动的 mock 模型
 ├── internal/model/anthropic.go    # 真实 Claude/Anthropic tool use provider
 ├── internal/model/deepseek.go     # 真实 DeepSeek tool calling provider
+├── internal/memory/               # 本地持久化记忆存储
 ├── internal/skills/               # 本地 Markdown skill 加载与选择
 ├── internal/tools/tool.go         # 工具接口和注册表
 ├── internal/tools/calculator.go   # 计算器工具
 ├── internal/tools/clock.go        # 当前时间工具
 ├── internal/tools/echo.go         # 回显工具
 ├── internal/tools/weather.go      # mock 天气工具
+├── internal/tools/memory.go       # 本地记忆工具
+├── memory/memory.json             # 默认记忆文件，运行时自动创建
 └── skills/                        # 示例 skill 文件
 ```
 
@@ -238,10 +241,72 @@ type Tool interface {
 - `clock` 负责读取当前时间。
 - `weather` 负责返回 mock 天气。
 - `echo` 负责返回文本。
+- `memory` 负责读写本地持久化记忆。
 
 模型只决定“要调用什么工具、传什么参数”；真正执行动作的是工具。
 
-### 3. Agent Loop
+### 3. 记忆 Memory 如何持久化上下文
+
+记忆功能解决的问题是：普通 Agent 的 `messages` 只在一次运行中存在，程序结束后就丢失了。如果希望 Agent 跨运行记住用户偏好或项目事实，就需要把信息保存到外部存储。
+
+本项目实现的是一个最小本地记忆系统：
+
+```text
+用户说“记住 language=Go”
+  ↓
+模型或 mock provider 决定调用 memory 工具
+  ↓
+memory 工具执行 set 操作
+  ↓
+internal/memory.Store 写入 memory/memory.json
+  ↓
+下次运行时，memory 工具可以 get/list/delete 这些记录
+```
+
+它由两部分组成：
+
+```text
+internal/memory/Store  = 负责 JSON 文件读写
+internal/tools/Memory  = 暴露给 Agent/模型调用的工具
+```
+
+默认记忆文件是：
+
+```text
+memory/memory.json
+```
+
+可以用 `-memory-path` 修改：
+
+```bash
+go run ./cmd/agent -memory-path memory/demo.json "记住 language=Go"
+go run ./cmd/agent -memory-path memory/demo.json "列出记忆"
+```
+
+`memory` 工具支持四个动作：
+
+```json
+{"action":"set","key":"language","value":"Go"}
+{"action":"get","key":"language"}
+{"action":"list"}
+{"action":"delete","key":"language"}
+```
+
+保存后的文件结构类似：
+
+```json
+{
+  "language": {
+    "key": "language",
+    "value": "Go",
+    "updated_at": "2026-06-08T10:00:00+08:00"
+  }
+}
+```
+
+注意：不要把密码、API Key、token 等敏感信息写入记忆。记忆文件是普通本地 JSON 文件，如果项目公开提交到 GitHub，应把 `memory/` 加入 `.gitignore`。
+
+### 4. Agent Loop
 
 `internal/agent/agent.go` 是核心。
 
@@ -266,7 +331,7 @@ return max steps error
 
 这个循环体现了 Agent 的本质：Agent 不是某个单独的模型，而是一个控制器。它负责维护状态、询问模型、执行工具、处理结果、判断是否结束。
 
-### 4. Skill 如何按需增强模型
+### 5. Skill 如何按需增强模型
 
 Skill 是给模型看的专项说明书，不直接执行代码。它和工具的区别是：
 
@@ -333,7 +398,7 @@ go run ./cmd/agent -skill-dir skills "请讲解 DeepSeek 的 tool_calls"
 go run ./cmd/agent -skill-dir /tmp/empty-skills "查询北京天气"
 ```
 
-### 5. Trace 为什么重要
+### 6. Trace 为什么重要
 
 CLI 默认打印 trace：
 
