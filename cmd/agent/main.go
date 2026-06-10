@@ -8,7 +8,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/zieckey/ai-study/internal/agent"
+	"github.com/zieckey/ai-study/internal/harness"
 	"github.com/zieckey/ai-study/internal/memory"
 	"github.com/zieckey/ai-study/internal/model"
 	"github.com/zieckey/ai-study/internal/tools"
@@ -72,7 +72,7 @@ func main() {
 			os.Exit(1)
 		}
 	}
-	a, err := agent.New(ctx, modelProvider, []tools.Tool{
+	h, err := harness.New(ctx, modelProvider, []tools.Tool{
 		tools.Calculator{},
 		tools.Clock{},
 		tools.Echo{},
@@ -80,13 +80,13 @@ func main() {
 		tools.Memory{Store: memoryStore},
 		tools.FileSearch{Root: "."},
 		tools.ReadFile{Root: "."},
-	}, agent.Config{MaxSteps: *maxSteps, SkillDir: *skillDir, MemoryInContext: *memoryInContext, MemoryContext: memoryContext})
+	}, harness.Config{MaxSteps: *maxSteps, SkillDir: *skillDir, MemoryInContext: *memoryInContext, MemoryContext: memoryContext})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 
-	result, err := a.Run(ctx, goal)
+	result, err := h.Run(ctx, goal)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -134,7 +134,7 @@ func buildProvider(ctx context.Context, name string, anthropicModel string, anth
 	}
 }
 
-func printTrace(ctx context.Context, traceEvents []agent.TraceEvent) {
+func printTrace(ctx context.Context, traceEvents []harness.TraceEvent) {
 	trace.Log(ctx, "main.printTrace", map[string]any{"events": len(traceEvents)})
 	for _, event := range traceEvents {
 		fmt.Printf("Step %d\n", event.Step)
@@ -149,11 +149,11 @@ func printTrace(ctx context.Context, traceEvents []agent.TraceEvent) {
 	}
 }
 
-func printJSON(ctx context.Context, goal string, result agent.Result) error {
+func printJSON(ctx context.Context, goal string, result harness.Result) error {
 	trace.Log(ctx, "main.printJSON", map[string]any{"goal": goal, "trace_events": len(result.Trace), "answer_len": len(result.Answer)})
 	output := struct {
 		Goal string `json:"goal"`
-		agent.Result
+		harness.Result
 	}{
 		Goal:   goal,
 		Result: result,

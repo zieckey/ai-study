@@ -110,7 +110,7 @@ go run ./cmd/agent -json "查询北京天气"
 CLI 默认会把函数级 trace log 打印到 stderr，方便观察程序运行轨迹和关键参数。每条日志都是 JSON：
 
 ```text
-[trace] {"function":"agent.Run.step","step":1,"messages":1,"ts":"..."}
+[trace] {"function":"harness.Run.step","step":1,"messages":1,"ts":"..."}
 [trace] {"function":"tools.Weather.Execute.done","city":"北京","result":"北京：晴，25°C","ts":"..."}
 ```
 
@@ -192,8 +192,7 @@ go test ./...
 ```text
 .
 ├── cmd/agent/main.go              # CLI 入口
-├── internal/agent/agent.go        # Agent Loop
-├── internal/agent/types.go        # Agent 配置、结果、trace 类型
+├── internal/harness/              # Agent harness/runtime：循环、注册表、策略、事件
 ├── internal/model/provider.go     # 模型 Provider 抽象
 ├── internal/model/mock.go         # 规则驱动的 mock 模型
 ├── internal/model/anthropic.go    # 真实 Claude/Anthropic tool use provider
@@ -336,9 +335,19 @@ go run ./cmd/agent -memory-path memory/demo.json "列出记忆"
 
 注意：不要把密码、API Key、token 等敏感信息写入记忆。记忆文件是普通本地 JSON 文件，如果项目公开提交到 GitHub，应把 `memory/` 加入 `.gitignore`。
 
-### 4. Agent Loop
+### 4. Harness / Agent Runtime
 
-`internal/agent/agent.go` 是核心。
+`internal/harness/harness.go` 是核心。Harness 是 Agent 的宿主运行时，负责把模型、工具、上下文、记忆、skills、策略和 trace 组织起来。
+
+它的职责包括：
+
+- 维护 `messages` 上下文
+- 调用 `Provider.Next()` 获取模型决策
+- 通过 `Registry` 查找工具
+- 通过 `Policy` 判断工具是否允许执行
+- 执行工具并收集 observation
+- 把 tool call 和 tool result 追加回上下文
+- 控制 `MaxSteps`，避免无限循环
 
 简化后的逻辑是：
 
@@ -360,6 +369,16 @@ return max steps error
 ```
 
 这个循环体现了 Agent 的本质：Agent 不是某个单独的模型，而是一个控制器。它负责维护状态、询问模型、执行工具、处理结果、判断是否结束。
+
+Harness 还包含策略层：
+
+```go
+type Policy interface {
+    AllowTool(ctx context.Context, call model.ToolCall) error
+}
+```
+
+默认 `AllowAllPolicy` 会允许所有工具。`StaticPolicy` 可以按工具名拒绝执行，用来体现“模型提出动作，不代表程序必须执行”。
 
 ### 5. Skill 如何按需增强模型
 

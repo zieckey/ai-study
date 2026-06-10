@@ -17,16 +17,16 @@ func TestFileSearchExecute(t *testing.T) {
 	if err := os.Mkdir(filepath.Join(dir, "internal"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "internal", "agent.go"), []byte("package internal"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "internal", "harness.go"), []byte("package internal"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	input, _ := json.Marshal(map[string]any{"query": "agent", "limit": 5})
+	input, _ := json.Marshal(map[string]any{"query": "harness", "limit": 5})
 	got, err := (FileSearch{Root: dir}).Execute(context.Background(), input)
 	if err != nil {
 		t.Fatalf("Execute returned error: %v", err)
 	}
-	if !strings.Contains(got, "internal/agent.go") {
+	if !strings.Contains(got, "internal/harness.go") {
 		t.Fatalf("result = %q", got)
 	}
 }

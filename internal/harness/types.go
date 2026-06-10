@@ -1,4 +1,4 @@
-package agent
+package harness
 
 import "encoding/json"
 
@@ -7,6 +7,7 @@ type Config struct {
 	SkillDir        string
 	MemoryInContext bool
 	MemoryContext   string
+	Policy          Policy
 }
 
 type Result struct {

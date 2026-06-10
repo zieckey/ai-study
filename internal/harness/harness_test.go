@@ -1,4 +1,4 @@
-package agent
+package harness
 
 import (
 	"context"
@@ -10,13 +10,13 @@ import (
 	"github.com/zieckey/ai-study/internal/tools"
 )
 
-func TestAgentRunCalculator(t *testing.T) {
-	a, err := New(context.Background(), model.NewMockProvider(), []tools.Tool{tools.Calculator{}, tools.Clock{}, tools.Echo{}, tools.Weather{}}, Config{MaxSteps: 5})
+func TestHarnessRunCalculator(t *testing.T) {
+	h, err := New(context.Background(), model.NewMockProvider(), []tools.Tool{tools.Calculator{}, tools.Clock{}, tools.Echo{}, tools.Weather{}}, Config{MaxSteps: 5})
 	if err != nil {
 		t.Fatalf("New returned error: %v", err)
 	}
 
-	result, err := a.Run(context.Background(), "帮我计算 12 * 23")
+	result, err := h.Run(context.Background(), "帮我计算 12 * 23")
 	if err != nil {
 		t.Fatalf("Run returned error: %v", err)
 	}
@@ -34,30 +34,30 @@ func TestAgentRunCalculator(t *testing.T) {
 	}
 }
 
-func TestAgentRunUnknownTool(t *testing.T) {
-	a, err := New(context.Background(), staticProvider{decision: model.Decision{Type: model.DecisionToolCall, ToolName: "missing", Arguments: json.RawMessage(`{}`)}}, nil, Config{MaxSteps: 1})
+func TestHarnessRunUnknownTool(t *testing.T) {
+	h, err := New(context.Background(), staticProvider{decision: model.Decision{Type: model.DecisionToolCall, ToolName: "missing", Arguments: json.RawMessage(`{}`)}}, nil, Config{MaxSteps: 1})
 	if err != nil {
 		t.Fatalf("New returned error: %v", err)
 	}
 
-	if _, err := a.Run(context.Background(), "test"); err == nil {
+	if _, err := h.Run(context.Background(), "test"); err == nil {
 		t.Fatal("Run returned nil error")
 	}
 }
 
-func TestAgentRunMaxSteps(t *testing.T) {
-	a, err := New(context.Background(), staticProvider{decision: model.Decision{Type: model.DecisionToolCall, ToolName: "echo", Arguments: json.RawMessage(`{"text":"again"}`)}}, []tools.Tool{tools.Echo{}}, Config{MaxSteps: 1})
+func TestHarnessRunMaxSteps(t *testing.T) {
+	h, err := New(context.Background(), staticProvider{decision: model.Decision{Type: model.DecisionToolCall, ToolName: "echo", Arguments: json.RawMessage(`{"text":"again"}`)}}, []tools.Tool{tools.Echo{}}, Config{MaxSteps: 1})
 	if err != nil {
 		t.Fatalf("New returned error: %v", err)
 	}
 
-	if _, err := a.Run(context.Background(), "test"); err == nil {
+	if _, err := h.Run(context.Background(), "test"); err == nil {
 		t.Fatal("Run returned nil error")
 	}
 }
 
-func TestAgentRunMultipleToolCalls(t *testing.T) {
-	a, err := New(context.Background(), &sequenceProvider{decisions: []model.Decision{
+func TestHarnessRunMultipleToolCalls(t *testing.T) {
+	h, err := New(context.Background(), &sequenceProvider{decisions: []model.Decision{
 		{
 			Type: model.DecisionToolCall,
 			ToolCalls: []model.ToolCall{
@@ -71,7 +71,7 @@ func TestAgentRunMultipleToolCalls(t *testing.T) {
 		t.Fatalf("New returned error: %v", err)
 	}
 
-	result, err := a.Run(context.Background(), "test")
+	result, err := h.Run(context.Background(), "test")
 	if err != nil {
 		t.Fatalf("Run returned error: %v", err)
 	}
@@ -83,13 +83,24 @@ func TestAgentRunMultipleToolCalls(t *testing.T) {
 	}
 }
 
-func TestAgentRunToolFailure(t *testing.T) {
-	a, err := New(context.Background(), staticProvider{decision: model.Decision{Type: model.DecisionToolCall, ToolName: "fail", Arguments: json.RawMessage(`{}`)}}, []tools.Tool{failingTool{}}, Config{MaxSteps: 1})
+func TestHarnessPolicyDeniesTool(t *testing.T) {
+	h, err := New(context.Background(), staticProvider{decision: model.Decision{Type: model.DecisionToolCall, ToolName: "echo", Arguments: json.RawMessage(`{"text":"again"}`)}}, []tools.Tool{tools.Echo{}}, Config{MaxSteps: 1, Policy: StaticPolicy{Denied: map[string]bool{"echo": true}}})
 	if err != nil {
 		t.Fatalf("New returned error: %v", err)
 	}
 
-	if _, err := a.Run(context.Background(), "test"); err == nil {
+	if _, err := h.Run(context.Background(), "test"); err == nil {
+		t.Fatal("Run returned nil error")
+	}
+}
+
+func TestHarnessRunToolFailure(t *testing.T) {
+	h, err := New(context.Background(), staticProvider{decision: model.Decision{Type: model.DecisionToolCall, ToolName: "fail", Arguments: json.RawMessage(`{}`)}}, []tools.Tool{failingTool{}}, Config{MaxSteps: 1})
+	if err != nil {
+		t.Fatalf("New returned error: %v", err)
+	}
+
+	if _, err := h.Run(context.Background(), "test"); err == nil {
 		t.Fatal("Run returned nil error")
 	}
 }

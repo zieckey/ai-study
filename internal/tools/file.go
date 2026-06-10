@@ -25,7 +25,7 @@ func (t FileSearch) Description() string {
 }
 
 func (t FileSearch) InputSchema() string {
-	return `{"type":"object","properties":{"query":{"type":"string","description":"文件名或相对路径关键词，例如 README、deepseek、agent.go"},"limit":{"type":"integer","description":"最多返回多少条，默认 20"}},"required":["query"],"additionalProperties":false}`
+	return `{"type":"object","properties":{"query":{"type":"string","description":"文件名或相对路径关键词，例如 README、deepseek、harness.go"},"limit":{"type":"integer","description":"最多返回多少条，默认 20"}},"required":["query"],"additionalProperties":false}`
 }
 
 func (t FileSearch) Execute(ctx context.Context, input json.RawMessage) (string, error) {
@@ -97,7 +97,7 @@ func (t ReadFile) Description() string {
 }
 
 func (t ReadFile) InputSchema() string {
-	return `{"type":"object","properties":{"path":{"type":"string","description":"项目内相对路径，例如 README.md 或 internal/agent/agent.go"},"max_bytes":{"type":"integer","description":"最多读取字节数，默认 20000"}},"required":["path"],"additionalProperties":false}`
+	return `{"type":"object","properties":{"path":{"type":"string","description":"项目内相对路径，例如 README.md 或 internal/harness/harness.go"},"max_bytes":{"type":"integer","description":"最多读取字节数，默认 20000"}},"required":["path"],"additionalProperties":false}`
 }
 
 func (t ReadFile) Execute(ctx context.Context, input json.RawMessage) (string, error) {

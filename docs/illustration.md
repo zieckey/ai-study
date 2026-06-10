@@ -548,7 +548,7 @@
   internal/model/anthropic.go                                                                                                                                                                                                              
   internal/model/deepseek.go                                                                                                                                                                                                                 
   internal/model/mock.go                 
-  internal/agent/agent.go                                                                                                                                                                                                                    
+  internal/harness/harness.go                                                                                                                                                                                                                    
   cmd/agent/main.go                                                                                                                                                                                                                        
   README.md                                                                                                                                                                                                                                  
                                                                                                                                                                                                                                            
@@ -610,7 +610,7 @@
   ---                                                                                                                                                                                                                                        
   第四步：Agent 保存 skills                                                                                                                                                                                                                  
                                                                                                                                                                                                                                              
-  agent.Config 增加：                    
+  harness.Config 增加：                    
                                                                                                                                                                                                                                              
   SkillDir string                                                                                                                                                                                                                          
                                                                                                                                                                                                                                              
@@ -866,7 +866,7 @@ tool_call read_file {"path":"README.md"}
 
 你现在的核心 harness 主要在：
 
-internal/agent/agent.go
+internal/harness/harness.go
 
 尤其是：
 
@@ -1074,8 +1074,7 @@ go run ./cmd/agent -provider deepseek "请搜索 README 并总结项目能力"
 ---
 7. 如果要在该学习项目中“正式引入 harness”，应该怎么做
 
-你现在虽然已经有 harness，但它还散在 agent.go、CLI、tools、trace 里。
-如果想把概念更清楚地引入项目，可以做一次结构化重构。
+当前项目已经把 harness/runtime 结构化到 internal/harness 中，CLI、tools、trace、provider 都围绕它协作。
 
 目标是让项目结构变成：
 
@@ -1087,13 +1086,7 @@ internal/harness/
 ├── policy.go
 └── events.go
 
-然后让：
-
-internal/agent
-
-变得更薄，甚至可以改名为：
-
-internal/harness
+旧的 internal/agent 包已移除，入口直接使用 internal/harness。
 
 ---
 8. 推荐的 Harness 目录设计
@@ -1110,12 +1103,7 @@ type Config struct {
     TraceLog        bool
 }
 
-现在这些配置分散在：
-
-cmd/agent/main.go
-internal/agent/types.go
-
-可以统一放到 harness config。
+当前运行时配置集中在 internal/harness/types.go，CLI 负责解析命令行参数后构造 harness.Config。
 
 ---
 8.2 internal/harness/harness.go
@@ -1133,7 +1121,7 @@ type Harness struct {
 
 func (h *Harness) Run(ctx context.Context, goal string) (Result, error)
 
-这就是你现在 Agent.Run() 的升级版。
+这是当前项目的核心运行时。
 
 ---
 8.3 internal/harness/events.go
@@ -1171,7 +1159,7 @@ final_answer
 
 这个很重要。
 
-当前工具只要模型返回，harness 就执行。
+当前 harness 在执行工具前会经过 Policy 检查；默认 AllowAllPolicy 允许所有工具，StaticPolicy 可以拒绝指定工具。
 
 未来如果加入：
 
@@ -1222,31 +1210,20 @@ type Registry struct {
 func (r *Registry) Get(name string) (tools.Tool, bool)
 func (r *Registry) Specs() []model.ToolSpec
 
-现在这部分在：
-
-tools.Registry()
-agent.toolSpecs()
-
-可以集中管理。
+当前工具注册和规格导出已经集中在 harness.Registry 中。
 
 ---
-9. 具体重构路线
+9. 已完成的重构结果
 
-我建议分 5 步做，不要一次大改。
-
----
-第一步：保留现有 internal/agent，只引入 harness 概念文档
-
-先在 README 加一节：
-
-## Harness 是什么
-
-说明当前 internal/agent/agent.go 就是最小 harness。
-
-这一步不改代码。
+当前项目已完成以下 harness 化改造。
 
 ---
-第二步：把 agent.Config 扩展成 harness.Config
+第一步：引入 internal/harness
+
+核心运行时迁移到 internal/harness/harness.go。
+
+---
+第二步：把 harness.Config 扩展成 harness.Config
 
 新增：
 
@@ -1261,7 +1238,7 @@ type Config struct {
     MemoryContext   string
 }
 
-然后 agent.Config 可以暂时 alias：
+然后 harness.Config 可以暂时 alias：
 
 type Config = harness.Config
 
@@ -1320,39 +1297,17 @@ if err := h.policy.AllowTool(ctx, call); err != nil {
 模型提出动作，不代表程序必须执行
 
 ---
-第五步：把 Agent 改名或包裹成 Harness
+第五步：移除旧 Agent 包，直接使用 Harness
 
-两种方案：
+当前项目选择更清晰的方案：入口直接调用 internal/harness。
 
-方案 A：保守
-
-保留：
-
-internal/agent
-
-但 README 里说明：
-
-本项目里的 Agent 类型同时承担 harness/runtime 职责。
-
-优点：改动小。
-
-方案 B：更清晰
-
-新增：
-
-internal/harness
-
-把 Agent 迁移为：
-
-type Harness struct {}
-
-CLI 从：
-
-agent.New(...)
-
-改成：
+CLI 使用：
 
 harness.New(...)
+
+核心类型：
+
+type Harness struct {}
 
 优点：概念清楚。
 缺点：改动较多。
