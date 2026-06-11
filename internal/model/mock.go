@@ -30,20 +30,13 @@ func (p *MockProvider) Next(ctx context.Context, req Request) (Decision, error) 
 	}
 
 	goal := firstUserMessage(ctx, req.Messages)
-	if expression := findExpression(ctx, goal); expression != "" {
-		return toolCall(ctx, "calculator", map[string]string{"expression": expression})
-	}
-	if city := cityFromWeatherRequest(ctx, goal); city != "" {
-		return toolCall(ctx, "weather", map[string]string{"city": city})
-	}
-	if asksForTime(ctx, goal) {
-		return toolCall(ctx, "clock", map[string]string{"format": "2006-01-02 15:04:05"})
-	}
-	if text := textToRepeat(ctx, goal); text != "" {
-		return toolCall(ctx, "echo", map[string]string{"text": text})
-	}
-	if args := memoryRequest(ctx, goal); args != nil {
-		return toolCall(ctx, "memory", args)
+	trace.Log(ctx, "model.MockProvider.Next.first_user_message", map[string]any{"goal": goal, "answer_len": len(goal)})
+	if calls, err := toolCallsFromGoal(ctx, goal); err != nil {
+		return Decision{}, err
+	} else if len(calls) > 1 {
+		return Decision{Type: DecisionToolCall, ToolCalls: calls}, nil
+	} else if len(calls) == 1 {
+		return Decision{Type: DecisionToolCall, ToolName: calls[0].ToolName, Arguments: calls[0].Arguments}, nil
 	}
 	if len(req.Skills) > 0 {
 		return Decision{Type: DecisionFinal, Answer: mockSkillAnswer(req.Skills)}, nil
@@ -54,13 +47,62 @@ func (p *MockProvider) Next(ctx context.Context, req Request) (Decision, error) 
 	return Decision{Type: DecisionFinal, Answer: answer}, nil
 }
 
-func toolCall(ctx context.Context, name string, args map[string]string) (Decision, error) {
-	trace.Log(ctx, "model.toolCall", map[string]any{"tool_name": name, "arguments": args})
+func toolCallsFromGoal(ctx context.Context, goal string) ([]ToolCall, error) {
+	trace.Log(ctx, "model.toolCallsFromGoal", map[string]any{"goal": goal})
+	calls := []ToolCall{}
+	for _, expression := range findExpressions(ctx, goal) {
+		call, err := newToolCall(ctx, "calculator", map[string]string{"expression": expression})
+		if err != nil {
+			return nil, err
+		}
+		calls = append(calls, call)
+	}
+	if city := cityFromWeatherRequest(ctx, goal); city != "" {
+		call, err := newToolCall(ctx, "weather", map[string]string{"city": city})
+		if err != nil {
+			return nil, err
+		}
+		calls = append(calls, call)
+	}
+	if asksForTime(ctx, goal) {
+		call, err := newToolCall(ctx, "clock", map[string]string{"format": "2006-01-02 15:04:05"})
+		if err != nil {
+			return nil, err
+		}
+		calls = append(calls, call)
+	}
+	if text := textToRepeat(ctx, goal); text != "" {
+		call, err := newToolCall(ctx, "echo", map[string]string{"text": text})
+		if err != nil {
+			return nil, err
+		}
+		calls = append(calls, call)
+	}
+	if args := memoryRequest(ctx, goal); args != nil {
+		call, err := newToolCall(ctx, "memory", args)
+		if err != nil {
+			return nil, err
+		}
+		calls = append(calls, call)
+	}
+	return calls, nil
+}
+
+func newToolCall(ctx context.Context, name string, args map[string]string) (ToolCall, error) {
+	trace.Log(ctx, "model.newToolCall", map[string]any{"tool_name": name, "arguments": args})
 	raw, err := json.Marshal(args)
+	if err != nil {
+		return ToolCall{}, err
+	}
+	return ToolCall{ToolName: name, Arguments: raw}, nil
+}
+
+func toolCall(ctx context.Context, name string, args map[string]string) (Decision, error) {
+	call, err := newToolCall(ctx, name, args)
 	if err != nil {
 		return Decision{}, err
 	}
-	return Decision{Type: DecisionToolCall, ToolName: name, Arguments: raw}, nil
+	return Decision{Type: DecisionToolCall, ToolName: call.ToolName, Arguments: call.Arguments}, nil
 }
 
 func mockSkillAnswer(selected []SkillSpec) string {
@@ -72,7 +114,7 @@ func mockSkillAnswer(selected []SkillSpec) string {
 }
 
 func finalFromObservation(ctx context.Context, messages []Message) Decision {
-	trace.Log(ctx, "model.finalFromObservation", map[string]any{"messages": len(messages)})
+	trace.Log(ctx, "model.finalFromObservation", map[string]any{"messages": messages})
 	last := messages[len(messages)-1]
 	input := ""
 	for i := len(messages) - 2; i >= 0; i-- {
@@ -97,14 +139,39 @@ func finalFromObservation(ctx context.Context, messages []Message) Decision {
 	case "weather":
 		return Decision{Type: DecisionFinal, Answer: fmt.Sprintf("天气查询结果：%s", last.Content)}
 	case "echo":
+		if summary := summarizeMultipleToolResults(messages); summary != "" {
+			return Decision{Type: DecisionFinal, Answer: summary}
+		}
 		return Decision{Type: DecisionFinal, Answer: last.Content}
 	default:
 		return Decision{Type: DecisionFinal, Answer: last.Content}
 	}
 }
 
+func summarizeMultipleToolResults(messages []Message) string {
+	toolResults := []string{}
+	for _, message := range messages {
+		if message.Role == RoleTool {
+			switch message.ToolName {
+			case "calculator":
+				toolResults = append(toolResults, fmt.Sprintf("计算结果：%s", message.Content))
+			case "weather":
+				toolResults = append(toolResults, fmt.Sprintf("天气查询结果：%s", message.Content))
+			case "clock":
+				toolResults = append(toolResults, fmt.Sprintf("当前时间：%s", message.Content))
+			case "echo":
+				toolResults = append(toolResults, message.Content)
+			}
+		}
+	}
+	if len(toolResults) <= 1 {
+		return ""
+	}
+	return strings.Join(toolResults, "\n")
+}
+
 func firstUserMessage(ctx context.Context, messages []Message) string {
-	trace.Log(ctx, "model.firstUserMessage", map[string]any{"messages": len(messages)})
+	trace.Log(ctx, "model.firstUserMessage", map[string]any{"messages": messages})
 	for _, message := range messages {
 		if message.Role == RoleUser {
 			return message.Content
@@ -182,6 +249,7 @@ func textToRepeat(ctx context.Context, goal string) string {
 		if idx := strings.Index(strings.ToLower(goal), strings.ToLower(marker)); idx >= 0 {
 			text := strings.TrimSpace(goal[idx+len(marker):])
 			text = strings.Trim(text, "：: ，,")
+			text = trimFollowingTask(text)
 			if text != "" {
 				return text
 			}
@@ -190,9 +258,30 @@ func textToRepeat(ctx context.Context, goal string) string {
 	return ""
 }
 
+func trimFollowingTask(text string) string {
+	for _, marker := range []string{"，然后", ",然后", " 然后", "，计算", ",计算", "，查询", ",查询"} {
+		if idx := strings.Index(text, marker); idx >= 0 {
+			return strings.TrimSpace(strings.Trim(text[:idx], "：: ，,"))
+		}
+	}
+	return text
+}
+
 func findExpression(ctx context.Context, goal string) string {
+	expressions := findExpressions(ctx, goal)
+	if len(expressions) == 0 {
+		return ""
+	}
+	return expressions[0]
+}
+
+func findExpressions(ctx context.Context, goal string) []string {
 	re := regexp.MustCompile(`-?\d+(?:\.\d+)?\s*[+\-*/]\s*-?\d+(?:\.\d+)?`)
-	expression := strings.TrimSpace(re.FindString(goal))
-	trace.Log(ctx, "model.findExpression", map[string]any{"goal": goal, "expression": expression})
-	return expression
+	matches := re.FindAllString(goal, -1)
+	expressions := make([]string, 0, len(matches))
+	for _, match := range matches {
+		expressions = append(expressions, strings.TrimSpace(match))
+	}
+	trace.Log(ctx, "model.findExpressions", map[string]any{"goal": goal, "expressions": expressions})
+	return expressions
 }

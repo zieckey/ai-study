@@ -27,6 +27,7 @@ func main() {
 	skillDir := flag.String("skill-dir", "skills", "本地 Markdown skills 目录")
 	memoryPath := flag.String("memory-path", "memory/memory.json", "本地持久化记忆文件路径")
 	memoryInContext := flag.Bool("memory-in-context", false, "是否把本地记忆内容自动注入模型上下文")
+	confirmTools := flag.String("confirm-tools", "", "逗号分隔的工具名列表；这些工具调用前需要人工确认")
 	jsonOutput := flag.Bool("json", false, "以 JSON 格式输出 goal、trace 和 answer")
 	flag.Parse()
 
@@ -51,6 +52,7 @@ func main() {
 		"skill_dir":                *skillDir,
 		"memory_path":              *memoryPath,
 		"memory_in_context":        *memoryInContext,
+		"confirm_tools":            *confirmTools,
 		"goal":                     goal,
 		"anthropic_api_key_set":    os.Getenv("ANTHROPIC_API_KEY") != "",
 		"deepseek_api_key_set":     os.Getenv("DEEPSEEK_API_KEY") != "",
@@ -72,6 +74,7 @@ func main() {
 			os.Exit(1)
 		}
 	}
+	policy := buildPolicy(*confirmTools)
 	h, err := harness.New(ctx, modelProvider, []tools.Tool{
 		tools.Calculator{},
 		tools.Clock{},
@@ -80,7 +83,7 @@ func main() {
 		tools.Memory{Store: memoryStore},
 		tools.FileSearch{Root: "."},
 		tools.ReadFile{Root: "."},
-	}, harness.Config{MaxSteps: *maxSteps, SkillDir: *skillDir, MemoryInContext: *memoryInContext, MemoryContext: memoryContext})
+	}, harness.Config{MaxSteps: *maxSteps, SkillDir: *skillDir, MemoryInContext: *memoryInContext, MemoryContext: memoryContext, Policy: policy})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -105,6 +108,20 @@ func main() {
 		printTrace(ctx, result.Trace)
 	}
 	fmt.Printf("Final Answer:\n%s\n", result.Answer)
+}
+
+func buildPolicy(confirmTools string) harness.Policy {
+	ask := map[string]bool{}
+	for _, name := range strings.Split(confirmTools, ",") {
+		name = strings.TrimSpace(name)
+		if name != "" {
+			ask[name] = true
+		}
+	}
+	if len(ask) == 0 {
+		return harness.AllowAllPolicy{}
+	}
+	return harness.ConfirmPolicy{Ask: ask}
 }
 
 func buildProvider(ctx context.Context, name string, anthropicModel string, anthropicMaxTokens int64, deepSeekModel string, deepSeekMaxTokens int64) (model.Provider, error) {

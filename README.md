@@ -181,6 +181,20 @@ go run ./cmd/agent \
 
 开启后，程序会在请求前读取记忆文件，把内容追加到 system prompt 的 `<memory>` 块中。记忆越多，消耗的 token 越多；不要把密码、API Key、token 等敏感信息写入记忆。
 
+如果希望某些工具执行前需要人工确认，可以使用 `-confirm-tools`：
+
+```bash
+go run ./cmd/agent -confirm-tools memory,read_file "记住 language=Go"
+```
+
+当模型请求这些工具时，harness 会提示：
+
+```text
+Approve tool call? tool=memory input={...} [y/N]:
+```
+
+输入 `y` 或 `yes` 才会执行；其他输入会被当作拒绝，并把拒绝原因作为 tool observation 发回模型。
+
 运行测试：
 
 ```bash
@@ -381,9 +395,9 @@ type Policy interface {
 }
 ```
 
-默认 `AllowAllPolicy` 会允许所有工具。`StaticPolicy` 可以按工具名拒绝执行，用来体现“模型提出动作，不代表程序必须执行”。
+默认 `AllowAllPolicy` 会允许所有工具。`StaticPolicy` 可以按工具名拒绝执行，用来体现“模型提出动作，不代表程序必须执行”。`ConfirmPolicy` 会在指定工具执行前向用户确认，CLI 的 `-confirm-tools` 参数就是基于它实现的。
 
-当工具不存在、策略拒绝或工具执行失败时，Harness 不会立刻中断整个运行，而是把错误转换成 tool observation 发回模型。例如：
+当工具不存在、策略拒绝、用户拒绝确认或工具执行失败时，Harness 不会立刻中断整个运行，而是把错误转换成 tool observation 发回模型。例如：
 
 ```text
 tool "read_file" failed: path must stay inside project root

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/zieckey/ai-study/internal/model"
@@ -90,6 +91,18 @@ func TestHarnessRunMultipleToolCalls(t *testing.T) {
 	}
 	if len(result.Trace) != 3 {
 		t.Fatalf("Trace length = %d", len(result.Trace))
+	}
+}
+
+func TestConfirmPolicyAllowAndDeny(t *testing.T) {
+	call := model.ToolCall{ToolName: "echo", Arguments: json.RawMessage(`{"text":"ok"}`)}
+	allow := ConfirmPolicy{Ask: map[string]bool{"echo": true}, Reader: strings.NewReader("y\n")}
+	if err := allow.AllowTool(context.Background(), call); err != nil {
+		t.Fatalf("AllowTool returned error: %v", err)
+	}
+	deny := ConfirmPolicy{Ask: map[string]bool{"echo": true}, Reader: strings.NewReader("n\n")}
+	if err := deny.AllowTool(context.Background(), call); err == nil {
+		t.Fatal("AllowTool returned nil error")
 	}
 }
 

@@ -23,6 +23,25 @@ func TestMockProviderCalculatorDecision(t *testing.T) {
 	}
 }
 
+func TestMockProviderMultipleToolCalls(t *testing.T) {
+	decision, err := NewMockProvider().Next(context.Background(), Request{
+		Messages: []Message{{Role: RoleUser, Content: "请重复 confirm ready，计算 5*6"}},
+	})
+	if err != nil {
+		t.Fatalf("Next returned error: %v", err)
+	}
+	calls := decision.Calls()
+	if len(calls) != 2 {
+		t.Fatalf("len(calls) = %d, decision = %+v", len(calls), decision)
+	}
+	if calls[0].ToolName != "calculator" {
+		t.Fatalf("first call = %+v", calls[0])
+	}
+	if calls[1].ToolName != "echo" {
+		t.Fatalf("second call = %+v", calls[1])
+	}
+}
+
 func TestMockProviderClockDecision(t *testing.T) {
 	decision, err := NewMockProvider().Next(context.Background(), Request{
 		Messages: []Message{{Role: RoleUser, Content: "现在几点？"}},
