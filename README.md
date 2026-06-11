@@ -362,6 +362,9 @@ for step in 1..MaxSteps:
 
     if decision is tool_call:
         observation = tool.Execute(arguments)
+        if tool failed:
+            observation = error message
+            mark tool result as error
         messages append tool_call
         messages append observation
 
@@ -379,6 +382,14 @@ type Policy interface {
 ```
 
 默认 `AllowAllPolicy` 会允许所有工具。`StaticPolicy` 可以按工具名拒绝执行，用来体现“模型提出动作，不代表程序必须执行”。
+
+当工具不存在、策略拒绝或工具执行失败时，Harness 不会立刻中断整个运行，而是把错误转换成 tool observation 发回模型。例如：
+
+```text
+tool "read_file" failed: path must stay inside project root
+```
+
+这样模型下一轮可以根据错误自我修正，例如换一个路径、先调用 `file_search`，或向用户解释限制。
 
 ### 5. Skill 如何按需增强模型
 

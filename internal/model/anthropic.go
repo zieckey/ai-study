@@ -148,7 +148,7 @@ func toAnthropicMessages(ctx context.Context, messages []Message) ([]anthropic.M
 				if messages[i].ToolUseID == "" {
 					return nil, fmt.Errorf("tool result for %q is missing tool_use_id", messages[i].ToolName)
 				}
-				blocks = append(blocks, anthropic.NewToolResultBlock(messages[i].ToolUseID, messages[i].Content, false))
+				blocks = append(blocks, anthropic.NewToolResultBlock(messages[i].ToolUseID, messages[i].Content, messages[i].ToolError))
 				i++
 			}
 			i--

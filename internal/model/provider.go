@@ -19,6 +19,7 @@ type Message struct {
 	ToolUseID string `json:"tool_use_id,omitempty"`
 	ToolName  string `json:"tool_name,omitempty"`
 	ToolInput string `json:"tool_input,omitempty"`
+	ToolError bool   `json:"tool_error,omitempty"`
 }
 
 type ToolSpec struct {

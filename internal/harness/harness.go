@@ -84,10 +84,7 @@ func (h *Harness) Run(ctx context.Context, goal string) (Result, error) {
 			assistantMessages := make([]model.Message, 0, len(calls))
 			toolMessages := make([]model.Message, 0, len(calls))
 			for _, call := range calls {
-				observation, err := h.executeTool(ctx, step, call)
-				if err != nil {
-					return Result{}, err
-				}
+				observation, isError := h.executeTool(ctx, step, call)
 
 				result.Trace = append(result.Trace, TraceEvent{
 					Step:        step,
@@ -96,9 +93,10 @@ func (h *Harness) Run(ctx context.Context, goal string) (Result, error) {
 					ToolName:    call.ToolName,
 					ToolInput:   call.Arguments,
 					Observation: observation,
+					ToolError:   isError,
 				})
 				assistantMessages = append(assistantMessages, model.Message{Role: model.RoleAssistant, Content: decision.Answer, ToolUseID: call.ToolUseID, ToolName: call.ToolName, ToolInput: string(call.Arguments)})
-				toolMessages = append(toolMessages, model.Message{Role: model.RoleTool, Content: observation, ToolUseID: call.ToolUseID, ToolName: call.ToolName})
+				toolMessages = append(toolMessages, model.Message{Role: model.RoleTool, Content: observation, ToolUseID: call.ToolUseID, ToolName: call.ToolName, ToolError: isError})
 			}
 			messages = append(messages, assistantMessages...)
 			messages = append(messages, toolMessages...)
@@ -110,24 +108,28 @@ func (h *Harness) Run(ctx context.Context, goal string) (Result, error) {
 	return Result{}, fmt.Errorf("harness stopped after %d steps without final answer", h.config.MaxSteps)
 }
 
-func (h *Harness) executeTool(ctx context.Context, step int, call model.ToolCall) (string, error) {
+func (h *Harness) executeTool(ctx context.Context, step int, call model.ToolCall) (string, bool) {
 	if err := h.policy.AllowTool(ctx, call); err != nil {
-		trace.Log(ctx, "harness.Run.policy.denied", map[string]any{"step": step, "tool_use_id": call.ToolUseID, "tool_name": call.ToolName, "error": err.Error()})
-		return "", err
+		observation := fmt.Sprintf("policy denied tool %q: %s", call.ToolName, err.Error())
+		trace.Log(ctx, "harness.Run.policy.denied", map[string]any{"step": step, "tool_use_id": call.ToolUseID, "tool_name": call.ToolName, "observation": observation})
+		return observation, true
 	}
 
 	tool, ok := h.registry.Get(call.ToolName)
 	if !ok {
-		return "", fmt.Errorf("unknown tool %q", call.ToolName)
+		observation := fmt.Sprintf("unknown tool %q", call.ToolName)
+		trace.Log(ctx, "harness.Run.tool.unknown", map[string]any{"step": step, "tool_use_id": call.ToolUseID, "tool_name": call.ToolName, "observation": observation})
+		return observation, true
 	}
 
 	observation, err := tool.Execute(ctx, call.Arguments)
 	if err != nil {
-		trace.Log(ctx, "harness.Run.tool.error", map[string]any{"step": step, "tool_use_id": call.ToolUseID, "tool_name": call.ToolName, "error": err.Error()})
-		return "", fmt.Errorf("tool %q failed: %w", call.ToolName, err)
+		observation := fmt.Sprintf("tool %q failed: %s", call.ToolName, err.Error())
+		trace.Log(ctx, "harness.Run.tool.error", map[string]any{"step": step, "tool_use_id": call.ToolUseID, "tool_name": call.ToolName, "observation": observation})
+		return observation, true
 	}
 	trace.Log(ctx, "harness.Run.tool.success", map[string]any{"step": step, "tool_use_id": call.ToolUseID, "tool_name": call.ToolName, "observation": observation})
-	return observation, nil
+	return observation, false
 }
 
 func (h *Harness) memoryContext() string {

@@ -22,4 +22,5 @@ type TraceEvent struct {
 	ToolName    string          `json:"tool_name,omitempty"`
 	ToolInput   json.RawMessage `json:"tool_input,omitempty"`
 	Observation string          `json:"observation,omitempty"`
+	ToolError   bool            `json:"tool_error,omitempty"`
 }

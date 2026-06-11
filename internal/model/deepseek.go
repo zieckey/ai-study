@@ -197,7 +197,7 @@ func toDeepSeekMessages(ctx context.Context, messages []Message, systemPrompt st
 				if messages[i].ToolUseID == "" {
 					return nil, fmt.Errorf("tool result for %q is missing tool_use_id", messages[i].ToolName)
 				}
-				result = append(result, deepSeekMessage{Role: "tool", Content: messages[i].Content, ToolCallID: messages[i].ToolUseID})
+				result = append(result, deepSeekMessage{Role: "tool", Content: messages[i].Content, ToolCallID: messages[i].ToolUseID, ToolError: messages[i].ToolError})
 				i++
 			}
 			i--
@@ -241,6 +241,7 @@ type deepSeekMessage struct {
 	Content    string             `json:"content,omitempty"`
 	ToolCalls  []deepSeekToolCall `json:"tool_calls,omitempty"`
 	ToolCallID string             `json:"tool_call_id,omitempty"`
+	ToolError  bool               `json:"tool_error,omitempty"`
 }
 
 type deepSeekTool struct {
