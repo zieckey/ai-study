@@ -55,22 +55,13 @@ type ToolCall struct {
 }
 
 type Decision struct {
-	Type      DecisionType    `json:"type"`
-	ToolUseID string          `json:"tool_use_id,omitempty"`
-	ToolName  string          `json:"tool_name,omitempty"`
-	Arguments json.RawMessage `json:"arguments,omitempty"`
-	ToolCalls []ToolCall      `json:"tool_calls,omitempty"`
-	Answer    string          `json:"answer,omitempty"`
+	Type      DecisionType `json:"type"`
+	ToolCalls []ToolCall   `json:"tool_calls,omitempty"`
+	Answer    string       `json:"answer,omitempty"`
 }
 
 func (d Decision) Calls() []ToolCall {
-	if len(d.ToolCalls) > 0 {
-		return d.ToolCalls
-	}
-	if d.ToolName == "" {
-		return nil
-	}
-	return []ToolCall{{ToolUseID: d.ToolUseID, ToolName: d.ToolName, Arguments: d.Arguments}}
+	return d.ToolCalls
 }
 
 type Provider interface {

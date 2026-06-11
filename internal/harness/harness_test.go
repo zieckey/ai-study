@@ -37,7 +37,7 @@ func TestHarnessRunCalculator(t *testing.T) {
 
 func TestHarnessReturnsUnknownToolAsObservation(t *testing.T) {
 	h, err := New(context.Background(), &sequenceProvider{decisions: []model.Decision{
-		{Type: model.DecisionToolCall, ToolName: "missing", Arguments: json.RawMessage(`{}`)},
+		{Type: model.DecisionToolCall, ToolCalls: []model.ToolCall{{ToolName: "missing", Arguments: json.RawMessage(`{}`)}}},
 		{Type: model.DecisionFinal, Answer: "recovered"},
 	}}, nil, Config{MaxSteps: 2})
 	if err != nil {
@@ -57,7 +57,7 @@ func TestHarnessReturnsUnknownToolAsObservation(t *testing.T) {
 }
 
 func TestHarnessRunMaxSteps(t *testing.T) {
-	h, err := New(context.Background(), staticProvider{decision: model.Decision{Type: model.DecisionToolCall, ToolName: "echo", Arguments: json.RawMessage(`{"text":"again"}`)}}, []tools.Tool{tools.Echo{}}, Config{MaxSteps: 1})
+	h, err := New(context.Background(), staticProvider{decision: model.Decision{Type: model.DecisionToolCall, ToolCalls: []model.ToolCall{{ToolName: "echo", Arguments: json.RawMessage(`{"text":"again"}`)}}}}, []tools.Tool{tools.Echo{}}, Config{MaxSteps: 1})
 	if err != nil {
 		t.Fatalf("New returned error: %v", err)
 	}
@@ -108,7 +108,7 @@ func TestConfirmPolicyAllowAndDeny(t *testing.T) {
 
 func TestHarnessPolicyDenialAsObservation(t *testing.T) {
 	h, err := New(context.Background(), &sequenceProvider{decisions: []model.Decision{
-		{Type: model.DecisionToolCall, ToolName: "echo", Arguments: json.RawMessage(`{"text":"again"}`)},
+		{Type: model.DecisionToolCall, ToolCalls: []model.ToolCall{{ToolName: "echo", Arguments: json.RawMessage(`{"text":"again"}`)}}},
 		{Type: model.DecisionFinal, Answer: "policy recovered"},
 	}}, []tools.Tool{tools.Echo{}}, Config{MaxSteps: 2, Policy: StaticPolicy{Denied: map[string]bool{"echo": true}}})
 	if err != nil {
@@ -129,7 +129,7 @@ func TestHarnessPolicyDenialAsObservation(t *testing.T) {
 
 func TestHarnessToolFailureAsObservation(t *testing.T) {
 	h, err := New(context.Background(), &sequenceProvider{decisions: []model.Decision{
-		{Type: model.DecisionToolCall, ToolName: "fail", Arguments: json.RawMessage(`{}`)},
+		{Type: model.DecisionToolCall, ToolCalls: []model.ToolCall{{ToolName: "fail", Arguments: json.RawMessage(`{}`)}}},
 		{Type: model.DecisionFinal, Answer: "tool recovered"},
 	}}, []tools.Tool{failingTool{}}, Config{MaxSteps: 2})
 	if err != nil {

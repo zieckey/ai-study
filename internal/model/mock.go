@@ -33,10 +33,8 @@ func (p *MockProvider) Next(ctx context.Context, req Request) (Decision, error) 
 	trace.Log(ctx, "model.MockProvider.Next.first_user_message", map[string]any{"goal": goal, "answer_len": len(goal)})
 	if calls, err := toolCallsFromGoal(ctx, goal); err != nil {
 		return Decision{}, err
-	} else if len(calls) > 1 {
+	} else if len(calls) > 0 {
 		return Decision{Type: DecisionToolCall, ToolCalls: calls}, nil
-	} else if len(calls) == 1 {
-		return Decision{Type: DecisionToolCall, ToolName: calls[0].ToolName, Arguments: calls[0].Arguments}, nil
 	}
 	if len(req.Skills) > 0 {
 		return Decision{Type: DecisionFinal, Answer: mockSkillAnswer(req.Skills)}, nil
@@ -102,7 +100,7 @@ func toolCall(ctx context.Context, name string, args map[string]string) (Decisio
 	if err != nil {
 		return Decision{}, err
 	}
-	return Decision{Type: DecisionToolCall, ToolName: call.ToolName, Arguments: call.Arguments}, nil
+	return Decision{Type: DecisionToolCall, ToolCalls: []ToolCall{call}}, nil
 }
 
 func mockSkillAnswer(selected []SkillSpec) string {

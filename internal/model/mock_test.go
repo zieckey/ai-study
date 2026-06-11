@@ -15,11 +15,15 @@ func TestMockProviderCalculatorDecision(t *testing.T) {
 	if decision.Type != DecisionToolCall {
 		t.Fatalf("Type = %q, want %q", decision.Type, DecisionToolCall)
 	}
-	if decision.ToolName != "calculator" {
-		t.Fatalf("ToolName = %q", decision.ToolName)
+	calls := decision.Calls()
+	if len(calls) != 1 {
+		t.Fatalf("len(calls) = %d", len(calls))
 	}
-	if string(decision.Arguments) != `{"expression":"1 + 2"}` {
-		t.Fatalf("Arguments = %s", string(decision.Arguments))
+	if calls[0].ToolName != "calculator" {
+		t.Fatalf("ToolName = %q", calls[0].ToolName)
+	}
+	if string(calls[0].Arguments) != `{"expression":"1 + 2"}` {
+		t.Fatalf("Arguments = %s", string(calls[0].Arguments))
 	}
 }
 
@@ -49,7 +53,8 @@ func TestMockProviderClockDecision(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Next returned error: %v", err)
 	}
-	if decision.Type != DecisionToolCall || decision.ToolName != "clock" {
+	calls := decision.Calls()
+	if decision.Type != DecisionToolCall || len(calls) != 1 || calls[0].ToolName != "clock" {
 		t.Fatalf("decision = %+v", decision)
 	}
 }
@@ -61,11 +66,12 @@ func TestMockProviderWeatherDecision(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Next returned error: %v", err)
 	}
-	if decision.Type != DecisionToolCall || decision.ToolName != "weather" {
+	calls := decision.Calls()
+	if decision.Type != DecisionToolCall || len(calls) != 1 || calls[0].ToolName != "weather" {
 		t.Fatalf("decision = %+v", decision)
 	}
-	if string(decision.Arguments) != `{"city":"上海"}` {
-		t.Fatalf("Arguments = %s", string(decision.Arguments))
+	if string(calls[0].Arguments) != `{"city":"上海"}` {
+		t.Fatalf("Arguments = %s", string(calls[0].Arguments))
 	}
 }
 
