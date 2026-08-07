@@ -1,0 +1,677 @@
+{
+  "1": {
+    "location": "internal/model/deepseek.go:101",
+    "function": "model.DeepSeekProvider.Next.request",
+    "max_tokens": 4096,
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是这个 Go 学习项目里的 DeepSeek provider。\n你可以使用工具完成任务：calculator 负责精确计算，clock 负责获取当前时间，weather 返回 mock 天气，echo 原样返回文本。\n当用户的问题需要外部实时信息、确定性计算或项目提供的工具能力时，请优先调用合适的工具；工具返回 observation 后，再给出简洁的中文最终答案。\n\n下面是当前任务相关的 skills。请遵循这些专项说明，但不要向用户生硬提及 skill 名称，除非用户询问。\n\n<skill name=\"agent-teacher\">\nDescription: 当用户想学习 AI Agent 原理、tool_calls、provider、trace log、模型交互流程时使用\n\n你是一个 AI Agent 教学助手。\n\n回答时遵循：\n1. 先用简洁语言解释原理。\n2. 再把原理对应到本项目的代码结构。\n3. 优先使用“用户目标 -> 模型决策 -> 工具调用 -> observation -> 下一轮决策 -> 最终答案”的链路讲解。\n4. 解释 tool calling 时，区分“模型返回调用意图”和“Go 程序真正执行工具”。\n5. 如果涉及 DeepSeek/OpenAI-compatible 协议，重点解释 `tools`、`tool_calls`、`function.name`、`function.arguments`、`tool_call_id`。\n6. 如果涉及 Claude/Anthropic，重点解释 `tools`、`tool_use`、`tool_result`、`tool_use_id`。\n7. 最后给出一个可运行命令或一个最小 JSON 示例。\n</skill>\n\n<skill name=\"math-tutor\">\nDescription: 当用户要求讲解数学、计算过程、推导步骤或想学习而不只是要答案时使用\n\n你是一个耐心的数学讲解助手。\n\n回答时遵循：\n1. 先说明要求解的问题。\n2. 再给出逐步推导过程。\n3. 最后给出最终答案。\n4. 如果可以用 calculator 工具验证结果，应先调用工具获得精确结果。\n5. 不要只给结论；除非用户明确要求简短答案。\n6. 使用普通文本数学格式，避免复杂 LaTeX。\n</skill>\n"
+      },
+      {
+        "role": "user",
+        "content": "帮我计算 12 * 20，然后查询北京天气，然后计算 10 * 20，然后讲解 DeepSeek 的 tool_calls，最最最后再帮忙查询上海天气 -json"
+      }
+    ],
+    "model": "deepseek-chat",
+    "skills": 2,
+    "tool_choice": "auto",
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "calculator",
+          "description": "计算一个简单的二元四则运算表达式，例如 12 * 23",
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {
+              "expression": {
+                "description": "简单二元四则运算表达式，例如 12 * 23",
+                "type": "string"
+              }
+            },
+            "required": [
+              "expression"
+            ],
+            "type": "object"
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "clock",
+          "description": "返回当前本地时间",
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {
+              "format": {
+                "description": "可选的 Go time layout，例如 2006-01-02 15:04:05",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "echo",
+          "description": "原样返回输入文本",
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {
+              "text": {
+                "description": "需要原样返回的文本",
+                "type": "string"
+              }
+            },
+            "required": [
+              "text"
+            ],
+            "type": "object"
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "weather",
+          "description": "查询城市天气，当前返回 mock 数据",
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {
+              "city": {
+                "description": "城市名称，例如 北京、上海、深圳、杭州",
+                "type": "string"
+              }
+            },
+            "required": [
+              "city"
+            ],
+            "type": "object"
+          }
+        }
+      }
+    ],
+    "ts": "2026-06-08T10:59:45.737177+08:00"
+  },
+  "2": {
+    "location": "internal/model/deepseek.go:101",
+    "function": "model.DeepSeekProvider.Next.request",
+    "max_tokens": 4096,
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是这个 Go 学习项目里的 DeepSeek provider。\n你可以使用工具完成任务：calculator 负责精确计算，clock 负责获取当前时间，weather 返回 mock 天气，echo 原样返回文本。\n当用户的问题需要外部实时信息、确定性计算或项目提供的工具能力时，请优先调用合适的工具；工具返回 observation 后，再给出简洁的中文最终答案。\n\n下面是当前任务相关的 skills。请遵循这些专项说明，但不要向用户生硬提及 skill 名称，除非用户询问。\n\n<skill name=\"agent-teacher\">\nDescription: 当用户想学习 AI Agent 原理、tool_calls、provider、trace log、模型交互流程时使用\n\n你是一个 AI Agent 教学助手。\n\n回答时遵循：\n1. 先用简洁语言解释原理。\n2. 再把原理对应到本项目的代码结构。\n3. 优先使用“用户目标 -> 模型决策 -> 工具调用 -> observation -> 下一轮决策 -> 最终答案”的链路讲解。\n4. 解释 tool calling 时，区分“模型返回调用意图”和“Go 程序真正执行工具”。\n5. 如果涉及 DeepSeek/OpenAI-compatible 协议，重点解释 `tools`、`tool_calls`、`function.name`、`function.arguments`、`tool_call_id`。\n6. 如果涉及 Claude/Anthropic，重点解释 `tools`、`tool_use`、`tool_result`、`tool_use_id`。\n7. 最后给出一个可运行命令或一个最小 JSON 示例。\n</skill>\n\n<skill name=\"math-tutor\">\nDescription: 当用户要求讲解数学、计算过程、推导步骤或想学习而不只是要答案时使用\n\n你是一个耐心的数学讲解助手。\n\n回答时遵循：\n1. 先说明要求解的问题。\n2. 再给出逐步推导过程。\n3. 最后给出最终答案。\n4. 如果可以用 calculator 工具验证结果，应先调用工具获得精确结果。\n5. 不要只给结论；除非用户明确要求简短答案。\n6. 使用普通文本数学格式，避免复杂 LaTeX。\n</skill>\n"
+      },
+      {
+        "role": "user",
+        "content": "帮我计算 12 * 20，然后查询北京天气，然后计算 10 * 20，然后讲解 DeepSeek 的 tool_calls，最最最后再帮忙查询上海天气 -json"
+      },
+      {
+        "role": "assistant",
+        "content": "好的，我先并行完成前三项任务！",
+        "tool_calls": [
+          {
+            "id": "call_00_vud4gFPug7eWRngyoYtp9307",
+            "type": "function",
+            "function": {
+              "name": "calculator",
+              "arguments": "{\"expression\": \"12 * 20\"}"
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": "240",
+        "tool_call_id": "call_00_vud4gFPug7eWRngyoYtp9307"
+      }
+    ],
+    "model": "deepseek-chat",
+    "skills": 2,
+    "tool_choice": "auto",
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "clock",
+          "description": "返回当前本地时间",
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {
+              "format": {
+                "description": "可选的 Go time layout，例如 2006-01-02 15:04:05",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "echo",
+          "description": "原样返回输入文本",
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {
+              "text": {
+                "description": "需要原样返回的文本",
+                "type": "string"
+              }
+            },
+            "required": [
+              "text"
+            ],
+            "type": "object"
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "weather",
+          "description": "查询城市天气，当前返回 mock 数据",
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {
+              "city": {
+                "description": "城市名称，例如 北京、上海、深圳、杭州",
+                "type": "string"
+              }
+            },
+            "required": [
+              "city"
+            ],
+            "type": "object"
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "calculator",
+          "description": "计算一个简单的二元四则运算表达式，例如 12 * 23",
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {
+              "expression": {
+                "description": "简单二元四则运算表达式，例如 12 * 23",
+                "type": "string"
+              }
+            },
+            "required": [
+              "expression"
+            ],
+            "type": "object"
+          }
+        }
+      }
+    ],
+    "ts": "2026-06-08T10:59:47.024731+08:00"
+  },
+  "3": {
+    "location": "internal/model/deepseek.go:101",
+    "function": "model.DeepSeekProvider.Next.request",
+    "max_tokens": 4096,
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是这个 Go 学习项目里的 DeepSeek provider。\n你可以使用工具完成任务：calculator 负责精确计算，clock 负责获取当前时间，weather 返回 mock 天气，echo 原样返回文本。\n当用户的问题需要外部实时信息、确定性计算或项目提供的工具能力时，请优先调用合适的工具；工具返回 observation 后，再给出简洁的中文最终答案。\n\n下面是当前任务相关的 skills。请遵循这些专项说明，但不要向用户生硬提及 skill 名称，除非用户询问。\n\n<skill name=\"agent-teacher\">\nDescription: 当用户想学习 AI Agent 原理、tool_calls、provider、trace log、模型交互流程时使用\n\n你是一个 AI Agent 教学助手。\n\n回答时遵循：\n1. 先用简洁语言解释原理。\n2. 再把原理对应到本项目的代码结构。\n3. 优先使用“用户目标 -> 模型决策 -> 工具调用 -> observation -> 下一轮决策 -> 最终答案”的链路讲解。\n4. 解释 tool calling 时，区分“模型返回调用意图”和“Go 程序真正执行工具”。\n5. 如果涉及 DeepSeek/OpenAI-compatible 协议，重点解释 `tools`、`tool_calls`、`function.name`、`function.arguments`、`tool_call_id`。\n6. 如果涉及 Claude/Anthropic，重点解释 `tools`、`tool_use`、`tool_result`、`tool_use_id`。\n7. 最后给出一个可运行命令或一个最小 JSON 示例。\n</skill>\n\n<skill name=\"math-tutor\">\nDescription: 当用户要求讲解数学、计算过程、推导步骤或想学习而不只是要答案时使用\n\n你是一个耐心的数学讲解助手。\n\n回答时遵循：\n1. 先说明要求解的问题。\n2. 再给出逐步推导过程。\n3. 最后给出最终答案。\n4. 如果可以用 calculator 工具验证结果，应先调用工具获得精确结果。\n5. 不要只给结论；除非用户明确要求简短答案。\n6. 使用普通文本数学格式，避免复杂 LaTeX。\n</skill>\n"
+      },
+      {
+        "role": "user",
+        "content": "帮我计算 12 * 20，然后查询北京天气，然后计算 10 * 20，然后讲解 DeepSeek 的 tool_calls，最最最后再帮忙查询上海天气 -json"
+      },
+      {
+        "role": "assistant",
+        "content": "好的，我先并行完成前三项任务！",
+        "tool_calls": [
+          {
+            "id": "call_00_vud4gFPug7eWRngyoYtp9307",
+            "type": "function",
+            "function": {
+              "name": "calculator",
+              "arguments": "{\"expression\": \"12 * 20\"}"
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": "240",
+        "tool_call_id": "call_00_vud4gFPug7eWRngyoYtp9307"
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "id": "call_00_MUV8UF4nVh8OZBcAQwFr9917",
+            "type": "function",
+            "function": {
+              "name": "weather",
+              "arguments": "{\"city\": \"北京\"}"
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": "北京：晴，25°C",
+        "tool_call_id": "call_00_MUV8UF4nVh8OZBcAQwFr9917"
+      }
+    ],
+    "model": "deepseek-chat",
+    "skills": 2,
+    "tool_choice": "auto",
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "calculator",
+          "description": "计算一个简单的二元四则运算表达式，例如 12 * 23",
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {
+              "expression": {
+                "description": "简单二元四则运算表达式，例如 12 * 23",
+                "type": "string"
+              }
+            },
+            "required": [
+              "expression"
+            ],
+            "type": "object"
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "clock",
+          "description": "返回当前本地时间",
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {
+              "format": {
+                "description": "可选的 Go time layout，例如 2006-01-02 15:04:05",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "echo",
+          "description": "原样返回输入文本",
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {
+              "text": {
+                "description": "需要原样返回的文本",
+                "type": "string"
+              }
+            },
+            "required": [
+              "text"
+            ],
+            "type": "object"
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "weather",
+          "description": "查询城市天气，当前返回 mock 数据",
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {
+              "city": {
+                "description": "城市名称，例如 北京、上海、深圳、杭州",
+                "type": "string"
+              }
+            },
+            "required": [
+              "city"
+            ],
+            "type": "object"
+          }
+        }
+      }
+    ],
+    "ts": "2026-06-08T10:59:48.189791+08:00"
+  },
+  "4": {
+    "location": "internal/model/deepseek.go:101",
+    "function": "model.DeepSeekProvider.Next.request",
+    "max_tokens": 4096,
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是这个 Go 学习项目里的 DeepSeek provider。\n你可以使用工具完成任务：calculator 负责精确计算，clock 负责获取当前时间，weather 返回 mock 天气，echo 原样返回文本。\n当用户的问题需要外部实时信息、确定性计算或项目提供的工具能力时，请优先调用合适的工具；工具返回 observation 后，再给出简洁的中文最终答案。\n\n下面是当前任务相关的 skills。请遵循这些专项说明，但不要向用户生硬提及 skill 名称，除非用户询问。\n\n<skill name=\"agent-teacher\">\nDescription: 当用户想学习 AI Agent 原理、tool_calls、provider、trace log、模型交互流程时使用\n\n你是一个 AI Agent 教学助手。\n\n回答时遵循：\n1. 先用简洁语言解释原理。\n2. 再把原理对应到本项目的代码结构。\n3. 优先使用“用户目标 -> 模型决策 -> 工具调用 -> observation -> 下一轮决策 -> 最终答案”的链路讲解。\n4. 解释 tool calling 时，区分“模型返回调用意图”和“Go 程序真正执行工具”。\n5. 如果涉及 DeepSeek/OpenAI-compatible 协议，重点解释 `tools`、`tool_calls`、`function.name`、`function.arguments`、`tool_call_id`。\n6. 如果涉及 Claude/Anthropic，重点解释 `tools`、`tool_use`、`tool_result`、`tool_use_id`。\n7. 最后给出一个可运行命令或一个最小 JSON 示例。\n</skill>\n\n<skill name=\"math-tutor\">\nDescription: 当用户要求讲解数学、计算过程、推导步骤或想学习而不只是要答案时使用\n\n你是一个耐心的数学讲解助手。\n\n回答时遵循：\n1. 先说明要求解的问题。\n2. 再给出逐步推导过程。\n3. 最后给出最终答案。\n4. 如果可以用 calculator 工具验证结果，应先调用工具获得精确结果。\n5. 不要只给结论；除非用户明确要求简短答案。\n6. 使用普通文本数学格式，避免复杂 LaTeX。\n</skill>\n"
+      },
+      {
+        "role": "user",
+        "content": "帮我计算 12 * 20，然后查询北京天气，然后计算 10 * 20，然后讲解 DeepSeek 的 tool_calls，最最最后再帮忙查询上海天气 -json"
+      },
+      {
+        "role": "assistant",
+        "content": "好的，我先并行完成前三项任务！",
+        "tool_calls": [
+          {
+            "id": "call_00_vud4gFPug7eWRngyoYtp9307",
+            "type": "function",
+            "function": {
+              "name": "calculator",
+              "arguments": "{\"expression\": \"12 * 20\"}"
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": "240",
+        "tool_call_id": "call_00_vud4gFPug7eWRngyoYtp9307"
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "id": "call_00_MUV8UF4nVh8OZBcAQwFr9917",
+            "type": "function",
+            "function": {
+              "name": "weather",
+              "arguments": "{\"city\": \"北京\"}"
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": "北京：晴，25°C",
+        "tool_call_id": "call_00_MUV8UF4nVh8OZBcAQwFr9917"
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "id": "call_00_bWWOl70FdFn5ryDVBvdd9957",
+            "type": "function",
+            "function": {
+              "name": "calculator",
+              "arguments": "{\"expression\": \"10 * 20\"}"
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": "200",
+        "tool_call_id": "call_00_bWWOl70FdFn5ryDVBvdd9957"
+      }
+    ],
+    "model": "deepseek-chat",
+    "skills": 2,
+    "tool_choice": "auto",
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "weather",
+          "description": "查询城市天气，当前返回 mock 数据",
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {
+              "city": {
+                "description": "城市名称，例如 北京、上海、深圳、杭州",
+                "type": "string"
+              }
+            },
+            "required": [
+              "city"
+            ],
+            "type": "object"
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "calculator",
+          "description": "计算一个简单的二元四则运算表达式，例如 12 * 23",
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {
+              "expression": {
+                "description": "简单二元四则运算表达式，例如 12 * 23",
+                "type": "string"
+              }
+            },
+            "required": [
+              "expression"
+            ],
+            "type": "object"
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "clock",
+          "description": "返回当前本地时间",
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {
+              "format": {
+                "description": "可选的 Go time layout，例如 2006-01-02 15:04:05",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "echo",
+          "description": "原样返回输入文本",
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {
+              "text": {
+                "description": "需要原样返回的文本",
+                "type": "string"
+              }
+            },
+            "required": [
+              "text"
+            ],
+            "type": "object"
+          }
+        }
+      }
+    ],
+    "ts": "2026-06-08T10:59:49.207389+08:00"
+  },
+  "5": {
+    "location": "internal/model/deepseek.go:101",
+    "function": "model.DeepSeekProvider.Next.request",
+    "max_tokens": 4096,
+    "messages": [
+      {
+        "role": "system",
+        "content": "你是这个 Go 学习项目里的 DeepSeek provider。\n你可以使用工具完成任务：calculator 负责精确计算，clock 负责获取当前时间，weather 返回 mock 天气，echo 原样返回文本。\n当用户的问题需要外部实时信息、确定性计算或项目提供的工具能力时，请优先调用合适的工具；工具返回 observation 后，再给出简洁的中文最终答案。\n\n下面是当前任务相关的 skills。请遵循这些专项说明，但不要向用户生硬提及 skill 名称，除非用户询问。\n\n<skill name=\"agent-teacher\">\nDescription: 当用户想学习 AI Agent 原理、tool_calls、provider、trace log、模型交互流程时使用\n\n你是一个 AI Agent 教学助手。\n\n回答时遵循：\n1. 先用简洁语言解释原理。\n2. 再把原理对应到本项目的代码结构。\n3. 优先使用“用户目标 -> 模型决策 -> 工具调用 -> observation -> 下一轮决策 -> 最终答案”的链路讲解。\n4. 解释 tool calling 时，区分“模型返回调用意图”和“Go 程序真正执行工具”。\n5. 如果涉及 DeepSeek/OpenAI-compatible 协议，重点解释 `tools`、`tool_calls`、`function.name`、`function.arguments`、`tool_call_id`。\n6. 如果涉及 Claude/Anthropic，重点解释 `tools`、`tool_use`、`tool_result`、`tool_use_id`。\n7. 最后给出一个可运行命令或一个最小 JSON 示例。\n</skill>\n\n<skill name=\"math-tutor\">\nDescription: 当用户要求讲解数学、计算过程、推导步骤或想学习而不只是要答案时使用\n\n你是一个耐心的数学讲解助手。\n\n回答时遵循：\n1. 先说明要求解的问题。\n2. 再给出逐步推导过程。\n3. 最后给出最终答案。\n4. 如果可以用 calculator 工具验证结果，应先调用工具获得精确结果。\n5. 不要只给结论；除非用户明确要求简短答案。\n6. 使用普通文本数学格式，避免复杂 LaTeX。\n</skill>\n"
+      },
+      {
+        "role": "user",
+        "content": "帮我计算 12 * 20，然后查询北京天气，然后计算 10 * 20，然后讲解 DeepSeek 的 tool_calls，最最最后再帮忙查询上海天气 -json"
+      },
+      {
+        "role": "assistant",
+        "content": "好的，我先并行完成前三项任务！",
+        "tool_calls": [
+          {
+            "id": "call_00_vud4gFPug7eWRngyoYtp9307",
+            "type": "function",
+            "function": {
+              "name": "calculator",
+              "arguments": "{\"expression\": \"12 * 20\"}"
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": "240",
+        "tool_call_id": "call_00_vud4gFPug7eWRngyoYtp9307"
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "id": "call_00_MUV8UF4nVh8OZBcAQwFr9917",
+            "type": "function",
+            "function": {
+              "name": "weather",
+              "arguments": "{\"city\": \"北京\"}"
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": "北京：晴，25°C",
+        "tool_call_id": "call_00_MUV8UF4nVh8OZBcAQwFr9917"
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "id": "call_00_bWWOl70FdFn5ryDVBvdd9957",
+            "type": "function",
+            "function": {
+              "name": "calculator",
+              "arguments": "{\"expression\": \"10 * 20\"}"
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": "200",
+        "tool_call_id": "call_00_bWWOl70FdFn5ryDVBvdd9957"
+      },
+      {
+        "role": "assistant",
+        "content": "好的，前三项结果已拿到。接下来我来讲解 **DeepSeek 的 tool_calls 机制**，然后在最后查询上海天气。\n\n---\n\n## 三、DeepSeek 的 tool_calls 机制讲解\n\n### 1. 核心链路\n\nDeepSeek 的 tool_calls 遵循 **用户目标 → 模型决策 → 工具调用 → observation → 下一轮决策 → 最终答案** 的链路。\n\n拿你刚才的提问过程举个例子：\n\n```\n第一轮：用户问\"计算 12 * 20\"\n  → 模型判断需要调用 calculator 工具\n  → 返回 tool_calls（包含函数名和参数）\n  → Go 程序真正执行 calculator(\"12 * 20\")\n  → 返回 observation: 240\n  → 模型拿到结果后给出最终答案\n\n第二轮：用户问\"查询北京天气\"\n  → 模型判断需要调用 weather 工具\n  → 返回 tool_calls\n  → Go 程序执行 weather(\"北京\")\n  → 返回 observation: \"北京：晴，25°C\"\n  → 模型给出最终答案\n```\n\n### 2. DeepSeek/OpenAI 协议中的关键字段\n\n当模型决定调用工具时，它会返回一个 `tool_calls` 数组，每个元素包含：\n\n| 字段 | 含义 | 示例 |\n|---|---|---|\n| `id` | 工具调用的唯一标识（tool_call_id） | `call_123` |\n| `type` | 固定为 `\"function\"` | `\"function\"` |\n| `function.name` | 要调用的工具名称 | `\"calculator\"` |\n| `function.arguments` | JSON 字符串，传给工具的参数 | `{\"expression\":\"12 * 20\"}` |\n\n你发送给 DeepSeek 的请求中需要包含 `tools` 字段来声明可用工具：\n\n```json\n{\n  \"model\": \"deepseek-chat\",\n  \"messages\": [{\"role\": \"user\", \"content\": \"计算 12 * 20\"}],\n  \"tools\": [\n    {\n      \"type\": \"function\",\n      \"function\": {\n        \"name\": \"calculator\",\n        \"description\": \"计算二元四则运算表达式\",\n        \"parameters\": {\n          \"type\": \"object\",\n          \"properties\": {\n            \"expression\": {\"type\": \"string\", \"description\": \"表达式\"}\n          },\n          \"required\": [\"expression\"]\n        }\n      }\n    }\n  ]\n}\n```\n\n### 3. 关键区分：模型返回意图 vs 程序真正执行\n\n- **模型只负责返回调用意图**（`tool_calls`），它并不真的执行代码。\n- **真正执行工具的是 Go 程序**（本项目的 provider 层）。程序拿到 `function.name` 和 `function.arguments` 后，调用对应的 Go 函数。\n- 执行完毕后，**将结果以 `tool` 角色的消息**（含 `tool_call_id`）发回给模型，模型再根据结果生成最终回复。\n\n```json\n// 第二轮：把工具结果发回给模型\n{\n  \"role\": \"tool\",\n  \"tool_call_id\": \"call_123\",\n  \"content\": \"240\"\n}\n```\n\n### 4. 为什么这样设计？\n\n因为大模型本身是**无状态的文本生成器**，没有计算能力，也无法获取实时信息。通过 tool_calls 机制：\n\n- 模型负责\"思考\"该用什么工具\n- 外部程序负责\"动手\"执行\n- 模型再基于结果给出人类可读的答案\n\n这就构成了一个 **Agent（智能体）** 的基本循环。\n\n---\n\n现在完成最后一项——查询上海天气！",
+        "tool_calls": [
+          {
+            "id": "call_00_aEMLFTISETJ7qJHgcGNg7409",
+            "type": "function",
+            "function": {
+              "name": "weather",
+              "arguments": "{\"city\": \"上海\"}"
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": "上海：多云，27°C",
+        "tool_call_id": "call_00_aEMLFTISETJ7qJHgcGNg7409"
+      }
+    ],
+    "model": "deepseek-chat",
+    "skills": 2,
+    "tool_choice": "auto",
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "clock",
+          "description": "返回当前本地时间",
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {
+              "format": {
+                "description": "可选的 Go time layout，例如 2006-01-02 15:04:05",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "echo",
+          "description": "原样返回输入文本",
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {
+              "text": {
+                "description": "需要原样返回的文本",
+                "type": "string"
+              }
+            },
+            "required": [
+              "text"
+            ],
+            "type": "object"
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "weather",
+          "description": "查询城市天气，当前返回 mock 数据",
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {
+              "city": {
+                "description": "城市名称，例如 北京、上海、深圳、杭州",
+                "type": "string"
+              }
+            },
+            "required": [
+              "city"
+            ],
+            "type": "object"
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "calculator",
+          "description": "计算一个简单的二元四则运算表达式，例如 12 * 23",
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {
+              "expression": {
+                "description": "简单二元四则运算表达式，例如 12 * 23",
+                "type": "string"
+              }
+            },
+            "required": [
+              "expression"
+            ],
+            "type": "object"
+          }
+        }
+      }
+    ],
+    "ts": "2026-06-08T10:59:55.811715+08:00"
+  }
+}
