@@ -117,6 +117,136 @@ default:
 
 每一轮大约排除一半元素，因此时间复杂度是 **O(log n)**。二分查找的前提是数组有序；无序数据不能可靠地判断该保留哪一半。
 
+
+## 第二部分：模型——多特征线性回归
+
+### 什么是模型
+
+模型表示从数据中总结出来的规律。程序不会手写“学习一小时能提高多少分”，而是将已有样本交给训练算法，计算出最能贴近样本的参数。
+
+本示例用三个特征预测考试分数：
+
+| 特征 | 含义 | 示例值 |
+| --- | --- | --- |
+| `study hours` | 学习时长 | `4.5` 小时 |
+| `attendance rate` | 出勤率 | `0.88`，即 88% |
+| `previous score` | 之前的成绩 | `76` 分 |
+
+待预测的考试分数是**标签**（label）。一条训练数据由特征和标签组成：
+
+```go
+type Sample struct {
+    Features []float64
+    Label    float64
+}
+```
+
+例如：
+
+```go
+Sample{
+    Features: []float64{4.5, 0.88, 76},
+    Label:    91,
+}
+```
+
+将两者放进同一个 `Sample`，可以避免平行数组中“第 i 个特征和第 i 个标签错配”的问题。
+
+### 多特征线性模型公式
+
+一元线性回归使用：
+
+```text
+y = w × x + b
+```
+
+多特征线性回归将它扩展为：
+
+```text
+y = w₁x₁ + w₂x₂ + … + wₙxₙ + b
+```
+
+- `x₁, x₂, …, xₙ`：多个输入特征。
+- `w₁, w₂, …, wₙ`：各特征对应的权重。
+- `b`：偏置（bias）或截距（intercept）。
+- `y`：模型预测的标签。
+
+代码中用下面的结构保存已经训练出的模型：
+
+```go
+type LinearModel struct {
+    Weights []float64
+    Bias    float64
+}
+```
+
+### `Predict`：用参数预测新样本
+
+```go
+func (m LinearModel) Predict(features []float64) (float64, error) {
+    if len(features) != len(m.Weights) {
+        return 0, fmt.Errorf("expected %d features, got %d", len(m.Weights), len(features))
+    }
+
+    prediction := m.Bias
+    for i, feature := range features {
+        prediction += m.Weights[i] * feature
+    }
+    return prediction, nil
+}
+```
+
+预测时从偏置 `b` 开始，再累加每个 `weight × feature`。特征数量必须与模型训练时的数量一致；例如三特征模型不能只提供两个特征。这里返回 `error`，使调用方可以处理维度不匹配，而不是静默给出错误结果。
+
+### `trainLinearModel`：从样本计算参数
+
+```go
+func trainLinearModel(samples []Sample) (LinearModel, error)
+```
+
+训练是根据一批带标签样本寻找权重和偏置的过程。函数首先检查：
+
+- 样本不能为空。
+- 每条样本必须至少有一个特征。
+- 所有样本的特征数量必须相同。
+- 对 `n` 个特征，至少需要 `n + 1` 条样本拟合 `n` 个权重和一个偏置。
+
+### 普通最小二乘法
+
+训练采用**普通最小二乘法**（ordinary least squares, OLS）。它选择一组参数，使所有训练样本的“预测值和真实值之差的平方和”尽量小：
+
+```text
+Σ(prediction - actual)² 尽量小
+```
+
+将全部特征写成矩阵 `X`、标签写成向量 `y`，参数写成向量 `θ`，可得到正规方程：
+
+```text
+(XᵀX)θ = Xᵀy
+```
+
+这里的 `θ` 包含偏置和全部权重。为统一处理偏置，代码为每一行数据添加一个值为 `1` 的首列：
+
+```text
+原始特征:       [学习时长, 出勤率, 之前成绩]
+加入截距列后:    [1, 学习时长, 出勤率, 之前成绩]
+```
+
+这样 `θ` 的第一个值就是 `Bias`，后续值就是 `Weights`。
+
+代码不会显式求矩阵逆，而是先累积出 `XᵀX` 和 `Xᵀy`，再调用 `solveLinearSystem` 解方程组。这比直接使用 `(XᵀX)⁻¹` 更适合作为基础实现。
+
+### `solveLinearSystem`：高斯消元
+
+`solveLinearSystem` 使用**高斯消元法**。它将矩阵与右侧向量拼成增广矩阵，逐列消去主对角线下方的元素，最后从最后一行开始回代得到参数。
+
+每一列选择绝对值最大的可用元素作为主元（partial pivoting，部分主元选择），可减轻浮点除法带来的不稳定性。如果主元接近 0，说明特征无法唯一确定一组参数，函数返回 `features produce a singular matrix`。
+
+例如，当两个特征完全重复，或者所有样本的某个特征都一样时，可能出现这种**奇异矩阵**。这说明数据没有提供足够的独立信息。
+
+
+
+
 ---
 
 ## 第二部分：模型——逻辑回归预测违约概率
