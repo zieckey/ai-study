@@ -6,66 +6,121 @@ import (
 	"testing"
 )
 
-func TestTrainLinearModelRecoversKnownParameters(t *testing.T) {
+func TestTrainLogisticModelSeparatesClasses(t *testing.T) {
 	samples := []Sample{
-		{Features: []float64{0, 0}, Label: 5},
-		{Features: []float64{1, 0}, Label: 7},
-		{Features: []float64{0, 1}, Label: 2},
-		{Features: []float64{2, 1}, Label: 6},
-		{Features: []float64{1, 3}, Label: -2},
+		{Features: []float64{-3}, Label: 0},
+		{Features: []float64{-2}, Label: 0},
+		{Features: []float64{-1}, Label: 0},
+		{Features: []float64{1}, Label: 1},
+		{Features: []float64{2}, Label: 1},
+		{Features: []float64{3}, Label: 1},
 	}
 
-	model, err := trainLinearModel(samples)
+	model, err := trainLogisticModel(samples, 0.1, 2000)
 	if err != nil {
-		t.Fatalf("trainLinearModel returned an error: %v", err)
+		t.Fatalf("trainLogisticModel returned an error: %v", err)
 	}
 
-	assertClose(t, model.Bias, 5)
-	assertClose(t, model.Weights[0], 2)
-	assertClose(t, model.Weights[1], -3)
-
-	prediction, err := model.Predict([]float64{4, 2})
+	lowRiskProbability, err := model.PredictProbability([]float64{-2})
 	if err != nil {
-		t.Fatalf("Predict returned an error: %v", err)
+		t.Fatalf("PredictProbability returned an error: %v", err)
 	}
-	assertClose(t, prediction, 7)
+	highRiskProbability, err := model.PredictProbability([]float64{2})
+	if err != nil {
+		t.Fatalf("PredictProbability returned an error: %v", err)
+	}
+	if lowRiskProbability >= highRiskProbability {
+		t.Fatalf("low-risk probability %.6f is not lower than high-risk probability %.6f", lowRiskProbability, highRiskProbability)
+	}
+	if lowRiskProbability < 0 || lowRiskProbability > 1 || highRiskProbability < 0 || highRiskProbability > 1 {
+		t.Fatal("probabilities must be in [0, 1]")
+	}
+
+	predictedClass, err := model.PredictClass([]float64{2}, 0.5)
+	if err != nil {
+		t.Fatalf("PredictClass returned an error: %v", err)
+	}
+	if predictedClass != 1 {
+		t.Fatalf("predicted class = %d, want 1", predictedClass)
+	}
 }
 
-func TestTrainLinearModelRejectsInvalidSamples(t *testing.T) {
+func TestTrainLogisticModelUsesTrainingStatistics(t *testing.T) {
+	samples := []Sample{
+		{Features: []float64{10}, Label: 0},
+		{Features: []float64{20}, Label: 0},
+		{Features: []float64{30}, Label: 1},
+		{Features: []float64{40}, Label: 1},
+	}
+
+	model, err := trainLogisticModel(samples, 0.1, 10)
+	if err != nil {
+		t.Fatalf("trainLogisticModel returned an error: %v", err)
+	}
+
+	assertClose(t, model.Means[0], 25)
+	assertClose(t, model.Scales[0], math.Sqrt(125))
+}
+
+func TestTrainLogisticModelRejectsInvalidInput(t *testing.T) {
 	tests := []struct {
-		name    string
-		samples []Sample
+		name         string
+		samples      []Sample
+		learningRate float64
+		iterations   int
 	}{
-		{name: "empty", samples: nil},
-		{name: "no features", samples: []Sample{{Features: nil, Label: 1}}},
-		{name: "insufficient samples", samples: []Sample{{Features: []float64{1, 2}, Label: 3}, {Features: []float64{2, 3}, Label: 4}}},
-		{name: "ragged samples", samples: []Sample{{Features: []float64{1}, Label: 2}, {Features: []float64{2, 3}, Label: 4}}},
-		{name: "singular features", samples: []Sample{{Features: []float64{1}, Label: 2}, {Features: []float64{1}, Label: 3}}},
+		{name: "empty", samples: nil, learningRate: 0.1, iterations: 1},
+		{name: "no features", samples: []Sample{{Features: nil, Label: 0}}, learningRate: 0.1, iterations: 1},
+		{name: "ragged samples", samples: []Sample{{Features: []float64{1}, Label: 0}, {Features: []float64{2, 3}, Label: 1}}, learningRate: 0.1, iterations: 1},
+		{name: "invalid label", samples: []Sample{{Features: []float64{1}, Label: 2}}, learningRate: 0.1, iterations: 1},
+		{name: "not finite feature", samples: []Sample{{Features: []float64{math.NaN()}, Label: 0}}, learningRate: 0.1, iterations: 1},
+		{name: "invalid learning rate", samples: []Sample{{Features: []float64{1}, Label: 0}}, learningRate: 0, iterations: 1},
+		{name: "invalid iterations", samples: []Sample{{Features: []float64{1}, Label: 0}}, learningRate: 0.1, iterations: 0},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if _, err := trainLinearModel(test.samples); err == nil {
-				t.Fatal("trainLinearModel returned nil error")
+			if _, err := trainLogisticModel(test.samples, test.learningRate, test.iterations); err == nil {
+				t.Fatal("trainLogisticModel returned nil error")
 			}
 		})
 	}
 }
 
-func TestPredictRejectsWrongFeatureCount(t *testing.T) {
-	model := LinearModel{Weights: []float64{1, 2}, Bias: 3}
-	if _, err := model.Predict([]float64{1}); err == nil {
-		t.Fatal("Predict returned nil error")
+func TestSigmoidHandlesExtremeValues(t *testing.T) {
+	if probability := sigmoid(1000); probability != 1 {
+		t.Fatalf("sigmoid(1000) = %v, want 1", probability)
+	}
+	if probability := sigmoid(-1000); probability != 0 {
+		t.Fatalf("sigmoid(-1000) = %v, want 0", probability)
+	}
+}
+
+func TestPredictRejectsInvalidFeaturesAndThreshold(t *testing.T) {
+	model := LogisticModel{
+		Weights: []float64{1},
+		Means:   []float64{0},
+		Scales:  []float64{1},
+	}
+
+	if _, err := model.PredictProbability([]float64{1, 2}); err == nil {
+		t.Fatal("PredictProbability accepted wrong feature count")
+	}
+	if _, err := model.PredictProbability([]float64{math.Inf(1)}); err == nil {
+		t.Fatal("PredictProbability accepted infinite feature")
+	}
+	if _, err := model.PredictClass([]float64{1}, 0); err == nil {
+		t.Fatal("PredictClass accepted invalid threshold")
 	}
 }
 
 func TestSplitSamplesIsDeterministicAndDoesNotMutateInput(t *testing.T) {
 	samples := []Sample{
-		{Features: []float64{1}, Label: 1},
-		{Features: []float64{2}, Label: 2},
-		{Features: []float64{3}, Label: 3},
-		{Features: []float64{4}, Label: 4},
-		{Features: []float64{5}, Label: 5},
+		{Features: []float64{1}, Label: 0},
+		{Features: []float64{2}, Label: 1},
+		{Features: []float64{3}, Label: 0},
+		{Features: []float64{4}, Label: 1},
+		{Features: []float64{5}, Label: 0},
 	}
 	original := append([]Sample(nil), samples...)
 
@@ -90,17 +145,17 @@ func TestSplitSamplesIsDeterministicAndDoesNotMutateInput(t *testing.T) {
 
 	seen := make(map[float64]bool)
 	for _, sample := range train {
-		seen[sample.Label] = true
+		seen[sample.Features[0]] = true
 	}
 	for _, sample := range test {
-		if seen[sample.Label] {
-			t.Fatalf("label %v appears in both splits", sample.Label)
+		if seen[sample.Features[0]] {
+			t.Fatalf("sample %v appears in both splits", sample.Features)
 		}
 	}
 }
 
 func TestSplitSamplesRejectsInvalidInput(t *testing.T) {
-	samples := []Sample{{Features: []float64{1}, Label: 1}, {Features: []float64{2}, Label: 2}}
+	samples := []Sample{{Features: []float64{1}, Label: 0}, {Features: []float64{2}, Label: 1}}
 	for _, ratio := range []float64{0, 1, -0.1, 1.1} {
 		if _, _, err := splitSamples(samples, ratio, 42); err == nil {
 			t.Fatalf("splitSamples(%v) returned nil error", ratio)
@@ -111,25 +166,39 @@ func TestSplitSamplesRejectsInvalidInput(t *testing.T) {
 	}
 }
 
-func TestEvaluateCalculatesMAEAndRMSE(t *testing.T) {
-	model := LinearModel{Weights: []float64{1}}
+func TestEvaluateCalculatesClassificationMetrics(t *testing.T) {
+	model := LogisticModel{
+		Weights: []float64{1},
+		Means:   []float64{0},
+		Scales:  []float64{1},
+	}
 	samples := []Sample{
-		{Features: []float64{1}, Label: 0},
-		{Features: []float64{2}, Label: 4},
+		{Features: []float64{2}, Label: 1},
+		{Features: []float64{-2}, Label: 0},
+		{Features: []float64{2}, Label: 0},
+		{Features: []float64{-2}, Label: 1},
 	}
 
-	metrics, err := evaluate(model, samples)
+	metrics, err := evaluate(model, samples, 0.5)
 	if err != nil {
 		t.Fatalf("evaluate returned an error: %v", err)
 	}
 
-	assertClose(t, metrics.MAE, 1.5)
-	assertClose(t, metrics.RMSE, math.Sqrt(2.5))
+	if metrics.TruePositive != 1 || metrics.TrueNegative != 1 || metrics.FalsePositive != 1 || metrics.FalseNegative != 1 {
+		t.Fatalf("unexpected confusion matrix: %+v", metrics)
+	}
+	assertClose(t, metrics.Accuracy, 0.5)
+	assertClose(t, metrics.Precision, 0.5)
+	assertClose(t, metrics.Recall, 0.5)
 }
 
-func TestEvaluateRejectsEmptySamples(t *testing.T) {
-	if _, err := evaluate(LinearModel{}, nil); err == nil {
-		t.Fatal("evaluate returned nil error")
+func TestEvaluateRejectsInvalidInput(t *testing.T) {
+	model := LogisticModel{Weights: []float64{1}, Means: []float64{0}, Scales: []float64{1}}
+	if _, err := evaluate(model, nil, 0.5); err == nil {
+		t.Fatal("evaluate accepted empty samples")
+	}
+	if _, err := evaluate(model, []Sample{{Features: []float64{1}, Label: 1}}, 1); err == nil {
+		t.Fatal("evaluate accepted invalid threshold")
 	}
 }
 

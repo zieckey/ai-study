@@ -27,132 +27,175 @@ func binarySearch(sorted []int, target int) int {
 	return -1
 }
 
-// Sample 表示一条带标签的数据：特征用于预测，标签是真实结果。
+// Sample 表示一条带标签的数据；Label 为 0 表示未违约，1 表示违约。
 type Sample struct {
 	Features []float64
 	Label    float64
 }
 
-// LinearModel 保存多元线性回归训练得到的权重和偏置。
-type LinearModel struct {
+// LogisticModel 保存逻辑回归参数及训练集的特征标准化参数。
+type LogisticModel struct {
 	Weights []float64
 	Bias    float64
+	Means   []float64
+	Scales  []float64
 }
 
-// Predict 根据 y = w₁x₁ + ... + wₙxₙ + b 计算预测值。
-func (m LinearModel) Predict(features []float64) (float64, error) {
+// PredictProbability 返回特征对应的违约概率，范围为 [0, 1]。
+func (m LogisticModel) PredictProbability(features []float64) (float64, error) {
 	if len(features) != len(m.Weights) {
 		return 0, fmt.Errorf("expected %d features, got %d", len(m.Weights), len(features))
 	}
 
-	prediction := m.Bias
+	z := m.Bias
 	for i, feature := range features {
-		prediction += m.Weights[i] * feature
+		if !isFinite(feature) {
+			return 0, fmt.Errorf("feature %d must be finite", i)
+		}
+		z += m.Weights[i] * standardize(feature, m.Means[i], m.Scales[i])
 	}
-	return prediction, nil
+	return sigmoid(z), nil
 }
 
-// trainLinearModel 使用普通最小二乘法训练多元线性回归模型。
-func trainLinearModel(samples []Sample) (LinearModel, error) {
+// PredictClass 依据阈值将违约概率转换为 0（未违约）或 1（违约）。
+func (m LogisticModel) PredictClass(features []float64, threshold float64) (int, error) {
+	if threshold <= 0 || threshold >= 1 {
+		return 0, errors.New("threshold must be between 0 and 1")
+	}
+
+	probability, err := m.PredictProbability(features)
+	if err != nil {
+		return 0, err
+	}
+	if probability >= threshold {
+		return 1, nil
+	}
+	return 0, nil
+}
+
+// trainLogisticModel 使用训练集标准化和全批量梯度下降训练逻辑回归模型。
+func trainLogisticModel(samples []Sample, learningRate float64, iterations int) (LogisticModel, error) {
+	if learningRate <= 0 || !isFinite(learningRate) {
+		return LogisticModel{}, errors.New("learning rate must be a positive finite number")
+	}
+	if iterations <= 0 {
+		return LogisticModel{}, errors.New("iterations must be positive")
+	}
+
+	featureCount, err := validateSamples(samples)
+	if err != nil {
+		return LogisticModel{}, err
+	}
+
+	means, scales := featureStatistics(samples, featureCount)
+	weights := make([]float64, featureCount)
+	bias := 0.0
+	sampleCount := float64(len(samples))
+
+	for iteration := 0; iteration < iterations; iteration++ {
+		weightGradients := make([]float64, featureCount)
+		biasGradient := 0.0
+
+		for _, sample := range samples {
+			z := bias
+			for i, feature := range sample.Features {
+				z += weights[i] * standardize(feature, means[i], scales[i])
+			}
+
+			prediction := sigmoid(z)
+			errorValue := prediction - sample.Label
+			biasGradient += errorValue
+			for i, feature := range sample.Features {
+				weightGradients[i] += errorValue * standardize(feature, means[i], scales[i])
+			}
+		}
+
+		bias -= learningRate * biasGradient / sampleCount
+		for i := range weights {
+			weights[i] -= learningRate * weightGradients[i] / sampleCount
+		}
+	}
+
+	return LogisticModel{
+		Weights: weights,
+		Bias:    bias,
+		Means:   means,
+		Scales:  scales,
+	}, nil
+}
+
+func validateSamples(samples []Sample) (int, error) {
 	if len(samples) == 0 {
-		return LinearModel{}, errors.New("at least one sample is required")
+		return 0, errors.New("at least one sample is required")
 	}
 
 	featureCount := len(samples[0].Features)
 	if featureCount == 0 {
-		return LinearModel{}, errors.New("each sample must have at least one feature")
-	}
-	if len(samples) < featureCount+1 {
-		return LinearModel{}, fmt.Errorf("need at least %d samples for %d features", featureCount+1, featureCount)
-	}
-
-	// 增加截距列后，参数数量等于特征数量加上偏置 b。
-	parameterCount := featureCount + 1
-	matrix := make([][]float64, parameterCount)
-	vector := make([]float64, parameterCount)
-	for i := range matrix {
-		matrix[i] = make([]float64, parameterCount)
+		return 0, errors.New("each sample must have at least one feature")
 	}
 
 	for sampleIndex, sample := range samples {
 		if len(sample.Features) != featureCount {
-			return LinearModel{}, fmt.Errorf("sample %d has %d features, expected %d", sampleIndex, len(sample.Features), featureCount)
+			return 0, fmt.Errorf("sample %d has %d features, expected %d", sampleIndex, len(sample.Features), featureCount)
 		}
-
-		// 首列固定为 1，使偏置也能作为参数向量的一部分参与计算。
-		row := make([]float64, parameterCount)
-		row[0] = 1
-		copy(row[1:], sample.Features)
-		// 累积正规方程 (XᵀX)θ = Xᵀy 的左右两侧。
-		for i := range row {
-			vector[i] += row[i] * sample.Label
-			for j := range row {
-				matrix[i][j] += row[i] * row[j]
+		if sample.Label != 0 && sample.Label != 1 {
+			return 0, fmt.Errorf("sample %d label must be 0 or 1", sampleIndex)
+		}
+		for featureIndex, feature := range sample.Features {
+			if !isFinite(feature) {
+				return 0, fmt.Errorf("sample %d feature %d must be finite", sampleIndex, featureIndex)
 			}
 		}
 	}
 
-	parameters, err := solveLinearSystem(matrix, vector)
-	if err != nil {
-		return LinearModel{}, err
-	}
-
-	return LinearModel{
-		Bias:    parameters[0],
-		Weights: parameters[1:],
-	}, nil
+	return featureCount, nil
 }
 
-// solveLinearSystem 用带部分主元选择的高斯消元法求解 A×x=b。
-func solveLinearSystem(matrix [][]float64, vector []float64) ([]float64, error) {
-	n := len(matrix)
-	if n == 0 || len(vector) != n {
-		return nil, errors.New("matrix and vector dimensions do not match")
+// featureStatistics 只从训练集计算均值和标准差，避免测试集信息泄漏。
+func featureStatistics(samples []Sample, featureCount int) ([]float64, []float64) {
+	means := make([]float64, featureCount)
+	for _, sample := range samples {
+		for i, feature := range sample.Features {
+			means[i] += feature
+		}
+	}
+	for i := range means {
+		means[i] /= float64(len(samples))
 	}
 
-	augmented := make([][]float64, n)
-	for i := range matrix {
-		if len(matrix[i]) != n {
-			return nil, errors.New("matrix must be square")
-		}
-		augmented[i] = make([]float64, n+1)
-		copy(augmented[i], matrix[i])
-		augmented[i][n] = vector[i]
-	}
-
-	for column := 0; column < n; column++ {
-		// 选择当前列绝对值最大的主元，降低浮点计算误差。
-		pivot := column
-		for row := column + 1; row < n; row++ {
-			if math.Abs(augmented[row][column]) > math.Abs(augmented[pivot][column]) {
-				pivot = row
-			}
-		}
-		if math.Abs(augmented[pivot][column]) < 1e-12 {
-			return nil, errors.New("features produce a singular matrix")
-		}
-
-		augmented[column], augmented[pivot] = augmented[pivot], augmented[column]
-		// 将主元下方的元素消为 0，得到上三角矩阵。
-		for row := column + 1; row < n; row++ {
-			factor := augmented[row][column] / augmented[column][column]
-			for currentColumn := column; currentColumn <= n; currentColumn++ {
-				augmented[row][currentColumn] -= factor * augmented[column][currentColumn]
-			}
+	variances := make([]float64, featureCount)
+	for _, sample := range samples {
+		for i, feature := range sample.Features {
+			delta := feature - means[i]
+			variances[i] += delta * delta
 		}
 	}
 
-	// 从最后一行向上回代，依次得到每个未知参数。
-	solution := make([]float64, n)
-	for row := n - 1; row >= 0; row-- {
-		sum := augmented[row][n]
-		for column := row + 1; column < n; column++ {
-			sum -= augmented[row][column] * solution[column]
-		}
-		solution[row] = sum / augmented[row][row]
+	scales := make([]float64, featureCount)
+	for i, variance := range variances {
+		scales[i] = math.Sqrt(variance / float64(len(samples)))
 	}
+	return means, scales
+}
 
-	return solution, nil
+func standardize(value, mean, scale float64) float64 {
+	if scale == 0 {
+		return 0
+	}
+	return (value - mean) / scale
+}
+
+// sigmoid 将任意实数映射到 [0, 1]，并避免指数计算溢出。
+func sigmoid(value float64) float64 {
+	if value >= 0 {
+		return 1 / (1 + math.Exp(-value))
+	}
+	exp := math.Exp(value)
+	return exp / (1 + exp)
+}
+
+func isFinite(value float64) bool {
+	return !math.IsNaN(value) && !math.IsInf(value, 0)
 }
 
 // splitSamples 以固定种子打乱样本后，按比例切分为训练集和测试集。
@@ -180,92 +223,122 @@ func splitSamples(samples []Sample, trainRatio float64, seed int64) ([]Sample, [
 	return shuffled[:trainSize], shuffled[trainSize:], nil
 }
 
-// Metrics 保存测试集上的两种预测误差指标。
-type Metrics struct {
-	MAE  float64
-	RMSE float64
+// ClassificationMetrics 保存二分类预测的混淆矩阵和常用评估指标。
+type ClassificationMetrics struct {
+	TruePositive  int
+	TrueNegative  int
+	FalsePositive int
+	FalseNegative int
+	Accuracy      float64
+	Precision     float64
+	Recall        float64
 }
 
-// evaluate 只使用测试样本计算平均绝对误差（MAE）和均方根误差（RMSE）。
-func evaluate(model LinearModel, samples []Sample) (Metrics, error) {
+// evaluate 只使用测试样本计算混淆矩阵、准确率、精确率和召回率。
+func evaluate(model LogisticModel, samples []Sample, threshold float64) (ClassificationMetrics, error) {
 	if len(samples) == 0 {
-		return Metrics{}, errors.New("at least one test sample is required")
+		return ClassificationMetrics{}, errors.New("at least one test sample is required")
+	}
+	if threshold <= 0 || threshold >= 1 {
+		return ClassificationMetrics{}, errors.New("threshold must be between 0 and 1")
 	}
 
-	var absoluteError, squaredError float64
+	metrics := ClassificationMetrics{}
 	for _, sample := range samples {
-		prediction, err := model.Predict(sample.Features)
+		predictedClass, err := model.PredictClass(sample.Features, threshold)
 		if err != nil {
-			return Metrics{}, err
+			return ClassificationMetrics{}, err
 		}
-		// 残差为预测值减真实值；正值代表预测偏高。
-		errorValue := prediction - sample.Label
-		absoluteError += math.Abs(errorValue)
-		squaredError += errorValue * errorValue
+
+		switch {
+		case predictedClass == 1 && sample.Label == 1:
+			metrics.TruePositive++
+		case predictedClass == 0 && sample.Label == 0:
+			metrics.TrueNegative++
+		case predictedClass == 1 && sample.Label == 0:
+			metrics.FalsePositive++
+		default:
+			metrics.FalseNegative++
+		}
 	}
 
-	sampleCount := float64(len(samples))
-	return Metrics{
-		MAE:  absoluteError / sampleCount,
-		RMSE: math.Sqrt(squaredError / sampleCount),
-	}, nil
+	total := float64(len(samples))
+	metrics.Accuracy = float64(metrics.TruePositive+metrics.TrueNegative) / total
+	positivePredictions := metrics.TruePositive + metrics.FalsePositive
+	if positivePredictions > 0 {
+		metrics.Precision = float64(metrics.TruePositive) / float64(positivePredictions)
+	}
+	actualPositives := metrics.TruePositive + metrics.FalseNegative
+	if actualPositives > 0 {
+		metrics.Recall = float64(metrics.TruePositive) / float64(actualPositives)
+	}
+	return metrics, nil
+}
+
+func className(class int) string {
+	if class == 1 {
+		return "default"
+	}
+	return "non-default"
 }
 
 func main() {
-	// 对照示例：算法根据预先写好的规则执行。
 	fmt.Println("1. Algorithm: binary search")
 	numbers := []int{3, 8, 12, 19, 24, 31, 42}
 	target := 24
 	index := binarySearch(numbers, target)
 	fmt.Printf("Find %d in %v: index = %d\n\n", target, numbers, index)
 
-	fmt.Println("2. Model: multifeature linear regression")
-	featureNames := []string{"study hours", "attendance rate", "previous score"}
-	// 每条样本包含学习时长、出勤率、之前成绩，以及对应的真实考试分数。
+	fmt.Println("2. Model: logistic regression for default probability")
+	fmt.Println("Educational synthetic example only; not for credit decisions.")
+	featureNames := []string{"debt-to-income ratio", "prior late payments", "on-time repayment ratio"}
 	samples := []Sample{
-		{Features: []float64{1, 0.62, 52}, Label: 57},
-		{Features: []float64{2, 0.68, 57}, Label: 63},
-		{Features: []float64{2.5, 0.74, 61}, Label: 70},
-		{Features: []float64{3, 0.71, 65}, Label: 74},
-		{Features: []float64{3.5, 0.79, 68}, Label: 80},
-		{Features: []float64{4, 0.83, 72}, Label: 85},
-		{Features: []float64{4.5, 0.88, 76}, Label: 91},
-		{Features: []float64{5, 0.91, 80}, Label: 96},
-		{Features: []float64{5.5, 0.95, 83}, Label: 100},
-		{Features: []float64{6, 0.97, 87}, Label: 105},
-		{Features: []float64{6.5, 0.92, 90}, Label: 107},
-		{Features: []float64{7, 0.98, 93}, Label: 114},
+		{Features: []float64{0.12, 0, 0.99}, Label: 0},
+		{Features: []float64{0.18, 0, 0.96}, Label: 0},
+		{Features: []float64{0.22, 1, 0.93}, Label: 0},
+		{Features: []float64{0.28, 0, 0.95}, Label: 0},
+		{Features: []float64{0.32, 1, 0.88}, Label: 0},
+		{Features: []float64{0.38, 1, 0.83}, Label: 0},
+		{Features: []float64{0.44, 2, 0.78}, Label: 1},
+		{Features: []float64{0.51, 2, 0.72}, Label: 1},
+		{Features: []float64{0.58, 3, 0.66}, Label: 1},
+		{Features: []float64{0.63, 3, 0.59}, Label: 1},
+		{Features: []float64{0.71, 4, 0.54}, Label: 1},
+		{Features: []float64{0.78, 5, 0.48}, Label: 1},
+		{Features: []float64{0.83, 5, 0.42}, Label: 1},
+		{Features: []float64{0.89, 6, 0.36}, Label: 1},
+		{Features: []float64{0.35, 0, 0.97}, Label: 0},
 	}
 
-	// 80% 用于训练，剩余 20% 留作从未参与训练的测试数据。
 	trainSamples, testSamples, err := splitSamples(samples, 0.8, 42)
 	if err != nil {
 		panic(err)
 	}
-	// 仅用训练集学习参数，避免测试数据泄漏到模型中。
-	model, err := trainLinearModel(trainSamples)
+	model, err := trainLogisticModel(trainSamples, 0.1, 2000)
 	if err != nil {
 		panic(err)
 	}
-	// 只在测试集上计算误差，用于观察模型面对未知样本时的表现。
-	metrics, err := evaluate(model, testSamples)
+
+	const threshold = 0.5
+	metrics, err := evaluate(model, testSamples, threshold)
 	if err != nil {
 		panic(err)
 	}
 
 	fmt.Printf("Features: %v\n", featureNames)
 	fmt.Printf("Train samples: %d, test samples: %d\n", len(trainSamples), len(testSamples))
-	fmt.Printf("Learned model: score = %.2f", model.Bias)
+	fmt.Printf("Model: PD = sigmoid(%.2f", model.Bias)
 	for i, weight := range model.Weights {
-		fmt.Printf(" + %.2f * %s", weight, featureNames[i])
+		fmt.Printf(" + %.2f * standardized(%s)", weight, featureNames[i])
 	}
-	fmt.Println()
+	fmt.Println(")")
 
-	fmt.Println("Test predictions:")
+	fmt.Printf("Test predictions (threshold %.1f):\n", threshold)
 	for _, sample := range testSamples {
-		prediction, _ := model.Predict(sample.Features)
-		fmt.Printf("  features=%v, predicted=%.1f, actual=%.1f, residual=%.1f\n", sample.Features, prediction, sample.Label, prediction-sample.Label)
+		probability, _ := model.PredictProbability(sample.Features)
+		predictedClass, _ := model.PredictClass(sample.Features, threshold)
+		fmt.Printf("  features=%v, PD=%.3f, actual=%s, predicted=%s\n", sample.Features, probability, className(int(sample.Label)), className(predictedClass))
 	}
-	fmt.Printf("Test MAE: %.2f\n", metrics.MAE)
-	fmt.Printf("Test RMSE: %.2f\n", metrics.RMSE)
+	fmt.Printf("Confusion matrix: TP=%d, TN=%d, FP=%d, FN=%d\n", metrics.TruePositive, metrics.TrueNegative, metrics.FalsePositive, metrics.FalseNegative)
+	fmt.Printf("Test accuracy: %.2f, precision: %.2f, recall: %.2f\n", metrics.Accuracy, metrics.Precision, metrics.Recall)
 }
